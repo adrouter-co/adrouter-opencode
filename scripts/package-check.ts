@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import manifest from "../package.json" with { type: "json" };
 import releaseManifest from "../release-manifest.json" with { type: "json" };
+import { assertReleasePolicy } from "./release-policy.js";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -17,14 +18,7 @@ async function run(command: string[], cwd: string): Promise<string> {
 }
 
 assert(manifest.name === "@adrouter/opencode", "Unexpected package name.");
-assert(manifest.version === releaseManifest.version, "Package and release versions differ.");
-assert(releaseManifest.schema === 1, "Unsupported release manifest schema.");
-assert(releaseManifest.npm.package === manifest.name, "Release package name differs.");
-assert(
-  releaseManifest.release.finalTags.beta === manifest.version &&
-    releaseManifest.release.finalTags.latest === manifest.version,
-  "Beta and latest must both target this prerelease until the first stable release.",
-);
+assertReleasePolicy(releaseManifest, manifest);
 assert(manifest.main === "./dist/index.js", "Legacy main must point to the root provider.");
 assert(manifest.packageManager === "bun@1.3.14", "Bun must be pinned.");
 assert(
@@ -33,6 +27,36 @@ assert(
 );
 assert(manifest.publishConfig.access === "public", "Scoped package must be public.");
 assert(manifest.files.includes("src"), "Published source maps require src/.");
+
+const releaseWorkflow = readFileSync(
+  join(import.meta.dir, "../.github/workflows/release.yml"),
+  "utf8",
+);
+const publishWorkflow = readFileSync(
+  join(import.meta.dir, "../.github/workflows/publish.yml"),
+  "utf8",
+);
+const soakWorkflow = readFileSync(join(import.meta.dir, "../.github/workflows/soak.yml"), "utf8");
+assert(
+  releaseWorkflow.includes("release.githubPrerelease"),
+  "Tag staging must use manifest prerelease state.",
+);
+assert(
+  publishWorkflow.includes("fromJSON(needs.release-metadata.outputs.opencode-versions)"),
+  "Registry matrix must use manifest OpenCode versions.",
+);
+assert(
+  publishWorkflow.includes("release.supersedes ?? ''"),
+  "GitHub superseded-release handling must be optional.",
+);
+assert(
+  soakWorkflow.includes("scripts/verify-channel.ts") && soakWorkflow.includes("staging-canary.ts"),
+  "Stable soak workflow must verify the public package and authenticated canaries.",
+);
+assert(
+  !/0\.1\.0-beta\.\d+/.test(`${releaseWorkflow}\n${publishWorkflow}`),
+  "Protected release workflows must not hardcode a numbered beta.",
+);
 
 const directory = mkdtempSync(join(tmpdir(), "adrouter-package-check-"));
 try {

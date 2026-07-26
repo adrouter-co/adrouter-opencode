@@ -10,7 +10,7 @@ The package adds:
 - AI SDK v3 JSON and NDJSON transport for `/v1/agent/turn`
 - reasoning, tool-call, usage, injection, settlement, and ad metadata support
 - a plugin-only `app_bottom` panel for Tier A, B, C, and NONE outcomes
-- Tier A settlement detail and per-session cumulative savings
+- one compact Tier A/B/C footer presentation and per-session cumulative savings
 
 Sponsor data remains provider metadata. It is never inserted into prompts, model
 messages, tool inputs, tool results, or assistant response text.
@@ -20,6 +20,9 @@ messages, tool inputs, tool results, or assistant response text.
 ```sh
 opencode plugin --global @adrouter/opencode@beta
 ```
+
+The beta channel is the current release channel. After the first stable release, unqualified and
+`@latest` installs select stable `0.1.0` while `@beta` remains on the newest accepted beta.
 
 OpenCode detects both package targets:
 
@@ -158,18 +161,15 @@ guidance.
 
 ## Panel behavior
 
-- Tier A shows a compact line during generation and an expanded settlement card
-  afterward.
-- Tier B and C show the compact line.
+- Tier A, B, and C use the same compact line during routing, generation, and settlement.
 - Tier NONE remains visible for privacy and guardrail outcomes.
 - opt-out, degraded, no-inventory, and routing-failure outcomes clear any prior
   sponsor immediately.
 - cumulative savings persist for the current session and are deduplicated by
   AdRouter turn ID.
 
-OpenCode currently exposes `app_bottom` but no after-message transcript slot.
-Tier A detail therefore remains in the bottom panel until the next user turn.
-No OpenCode patch is required.
+OpenCode currently exposes `app_bottom` but no after-message transcript slot. Sponsorship therefore
+stays in the bottom panel and never enters the assistant response. No OpenCode patch is required.
 
 ## Troubleshooting
 
@@ -192,7 +192,7 @@ No OpenCode patch is required.
 ## Development
 
 ```sh
-bun install
+bun install --frozen-lockfile
 bun run release:check
 ```
 

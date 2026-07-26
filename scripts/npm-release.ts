@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import packageManifest from "../package.json" with { type: "json" };
-import releaseManifest from "../release-manifest.json" with { type: "json" };
+import releaseManifestJson from "../release-manifest.json" with { type: "json" };
+import { isBetaRelease, type ReleasePolicyManifest } from "./release-policy.js";
+
+const releaseManifest = releaseManifestJson as ReleasePolicyManifest;
 
 const registry = "https://registry.npmjs.org/";
 
@@ -194,13 +197,16 @@ function verifyRegistryOnce(
   );
   if (state === "candidate") assert(candidateMatches, "Candidate tag does not target the release.");
   if (state === "final") {
-    assert(finalMatches, "Final beta/latest tags do not target the release.");
+    assert(finalMatches, "Final npm tags do not match the release manifest.");
     assert(tags[candidate] === undefined, "Candidate tag remains after promotion.");
-    const superseded = registryPackage(releaseManifest.release.supersedes);
-    assert(
-      superseded.deprecated?.includes(artifact.version),
-      `Superseded ${releaseManifest.release.supersedes} is not deprecated.`,
-    );
+    const supersededVersion = releaseManifest.release.supersedes;
+    if (supersededVersion) {
+      const superseded = registryPackage(supersededVersion);
+      assert(
+        superseded.deprecated?.includes(artifact.version),
+        `Superseded ${supersededVersion} is not deprecated.`,
+      );
+    }
   }
   if (state === "resumable") {
     assert(candidateMatches || finalMatches, "Release is neither a candidate nor finalized.");
@@ -247,13 +253,17 @@ function promote(artifactFile: string): void {
       registry,
     ]);
   }
-  run("npm", [
-    "deprecate",
-    `${artifact.name}@${releaseManifest.release.supersedes}`,
-    `Superseded by ${artifact.name}@${artifact.version}; install @beta.`,
-    "--registry",
-    registry,
-  ]);
+  const supersededVersion = releaseManifest.release.supersedes;
+  if (supersededVersion) {
+    const channel = isBetaRelease(artifact.version) ? "beta" : "latest";
+    run("npm", [
+      "deprecate",
+      `${artifact.name}@${supersededVersion}`,
+      `Superseded by ${artifact.name}@${artifact.version}; install @${channel}.`,
+      "--registry",
+      registry,
+    ]);
+  }
   verifyRegistry(artifactFile, "final");
 }
 

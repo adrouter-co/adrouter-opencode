@@ -1,6 +1,7 @@
 const commands = [
   ["bun", "run", "lint"],
   ["bun", "run", "typecheck"],
+  ["bun", "run", "release:policy"],
   ["bun", "run", "test:coverage"],
   ["bun", "run", "build"],
   ["bun", "run", "audit"],

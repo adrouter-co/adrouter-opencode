@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.1.0-beta.4
+
+- Unified Tier A, B, and C sponsorships into the same compact OpenCode bottom-panel presentation.
+- Removed the duplicate settled Tier A card while retaining deduplicated cumulative session savings.
+- Added manifest-driven beta/stable release policy, optional superseded-version deprecation, dynamic
+  OpenCode registry matrices, and a 48-hour cross-platform stable-readiness gate.
+- Documented the first-stable channel transition: `latest` moves to stable while `beta` remains on
+  the accepted beta.
+
 ## 0.1.0-beta.3
 
 - Made global OpenCode installation the default documented setup and clarified

@@ -1,0 +1,99 @@
+name: Verify published channel
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact published version to verify
+        required: true
+        type: string
+      channel:
+        description: Public npm channel that must resolve to the version
+        required: true
+        type: choice
+        options:
+          - beta
+          - latest
+
+permissions: {}
+
+concurrency:
+  group: verify-${{ inputs.channel }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  release-metadata:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      opencode-versions: ${{ steps.release.outputs.opencode-versions }}
+    steps:
+      - name: Refuse verification outside the canonical repository
+        env:
+          ACTUAL_REPOSITORY: ${{ github.repository }}
+        run: test "${ACTUAL_REPOSITORY}" = "adrouter/adrouter-opencode"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: v${{ inputs.version }}
+          persist-credentials: false
+      - id: release
+        name: Read the tagged OpenCode compatibility matrix
+        run: |
+          expected=$(node -p "require('./release-manifest.json').version")
+          test "${expected}" = "${{ inputs.version }}"
+          versions=$(node -p "JSON.stringify(require('./release-manifest.json').npm.opencodeVersions)")
+          echo "opencode-versions=${versions}" >> "${GITHUB_OUTPUT}"
+
+  packaged-user:
+    name: ${{ matrix.os }} / OpenCode ${{ matrix.opencode }}
+    needs: release-metadata
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        opencode: ${{ fromJSON(needs.release-metadata.outputs.opencode-versions) }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: v${{ inputs.version }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Verify the public channel and candidate cleanup
+        env:
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/adrouter-empty-npmrc
+        run: bun scripts/verify-channel.ts "${{ inputs.channel }}" "${{ inputs.version }}"
+      - name: Install the exact public package and verify provider discovery
+        env:
+          ADROUTER_SMOKE_OPENCODE_VERSION: ${{ matrix.opencode }}
+          ADROUTER_SMOKE_PLUGIN_SPEC: "@adrouter/opencode@${{ inputs.version }}"
+          NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/adrouter-empty-npmrc
+        run: bun run plugin:check
+
+  staging-canaries:
+    needs: release-metadata
+    runs-on: ubuntu-latest
+    environment: adrouter-staging
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: v${{ inputs.version }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - name: Authenticated staging canaries
+        env:
+          ADROUTER_API_KEY: ${{ secrets.ADROUTER_STAGING_API_KEY }}
+        run: bun scripts/staging-canary.ts

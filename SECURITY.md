@@ -2,8 +2,9 @@
 
 ## Supported versions
 
-Security fixes are provided for the newest published beta only. Published npm
-versions are immutable; fixes are released as a new beta version.
+Security fixes are provided for the newest published stable and actively supported beta channels.
+Before the first stable release, the newest beta is the only supported version. Published npm
+versions are immutable; fixes use a new version rather than replacing an artifact.
 
 ## Reporting
 
@@ -13,8 +14,8 @@ prompts, private response bodies, local paths, or exploit details.
 
 ## Backend and credentials
 
-The hosted beta uses `https://api-staging.adrouter.co` and requires an invited
-credential. Custom remote backends must use HTTPS. HTTP is accepted only for
+The hosted service currently uses `https://api-staging.adrouter.co` and requires an invited
+credential, including when the package reaches stable `0.1.0`. Custom remote backends must use HTTPS. HTTP is accepted only for
 loopback development. Never put credentials in a backend URL, source file,
 issue, screenshot, or log.
 
