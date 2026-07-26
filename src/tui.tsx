@@ -8,7 +8,6 @@ import {
   AdRouterPanelState,
   formatSubsidy,
   renderCompactAd,
-  tierACard,
 } from "./presentation.js";
 
 const tui: TuiPlugin = async (api) => {
@@ -74,23 +73,9 @@ const tui: TuiPlugin = async (api) => {
         const ad = snapshot.ads[0];
         const width = Math.max(0, api.renderer.width);
         const palette = ADROUTER_PALETTE[api.theme.mode()];
-        const settlement = snapshot.phase === "streaming" ? undefined : snapshot.settlement;
-        const card = ad.tier === "A" && settlement ? tierACard(ad, settlement) : undefined;
         return (
           <box flexDirection="column">
             <text fg={palette.label}>{renderCompactAd(ad, width)}</text>
-            {card ? (
-              <box
-                flexDirection="column"
-                backgroundColor={palette.background}
-                paddingLeft={1}
-                paddingRight={1}
-              >
-                <text fg={palette.label}>{card.label}</text>
-                <text>{card.content}</text>
-                {card.saved ? <text fg={palette.label}>{card.saved}</text> : null}
-              </box>
-            ) : null}
             {savings > 0 ? (
               <text fg={palette.label}>{`saved $${formatSubsidy(savings)}`}</text>
             ) : null}

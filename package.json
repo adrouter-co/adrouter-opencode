@@ -1,6 +1,6 @@
 {
   "name": "@adrouter/opencode",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.4",
   "description": "AdRouter provider and tiered sponsorship panel for OpenCode",
   "license": "MIT",
   "type": "module",
@@ -58,6 +58,7 @@
     "test": "bun test",
     "test:coverage": "bun test --coverage",
     "audit": "bun scripts/audit.ts",
+    "release:policy": "bun scripts/release-policy.ts",
     "package:check": "bun scripts/package-check.ts",
     "plugin:check": "bun scripts/opencode-model-check.ts",
     "release:check": "bun scripts/release-check.ts",

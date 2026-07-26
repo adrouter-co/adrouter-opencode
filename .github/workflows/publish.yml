@@ -1,4 +1,4 @@
-name: Promote staged beta
+name: Promote staged release
 
 on:
   workflow_dispatch:
@@ -22,6 +22,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  release-metadata:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      opencode-versions: ${{ steps.release.outputs.opencode-versions }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: release
+        name: Read the tagged OpenCode compatibility matrix
+        run: |
+          versions=$(node -p "JSON.stringify(require('./release-manifest.json').npm.opencodeVersions)")
+          echo "opencode-versions=${versions}" >> "${GITHUB_OUTPUT}"
+
   verify-and-publish:
     runs-on: ubuntu-latest
     environment: npm-publish
@@ -37,6 +55,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ inputs.tag }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -58,6 +77,7 @@ jobs:
             package.json
             release-manifest.json
             scripts/npm-release.ts
+            scripts/release-policy.ts
           persist-credentials: false
       - name: Download the recorded draft assets
         env:
@@ -87,12 +107,14 @@ jobs:
   registry-install:
     name: registry-${{ matrix.os }}-opencode-${{ matrix.opencode }}
     if: ${{ inputs.phase == 'finalize-release' }}
-    needs: verify-and-publish
+    needs:
+      - release-metadata
+      - verify-and-publish
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        opencode: ["1.18.4", "1.18.5"]
+        opencode: ${{ fromJSON(needs.release-metadata.outputs.opencode-versions) }}
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -110,6 +132,7 @@ jobs:
             package.json
             release-manifest.json
             scripts/npm-release.ts
+            scripts/release-policy.ts
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -156,12 +179,13 @@ jobs:
             package.json
             release-manifest.json
             scripts/npm-release.ts
+            scripts/release-policy.ts
           persist-credentials: false
       - name: Download the recorded artifact manifest
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "${{ inputs.tag }}" --pattern "npm-artifacts.json" --dir .
-      - name: Promote beta and latest, remove candidate, and deprecate beta.2
+      - name: Promote final tags, remove candidate, and deprecate when configured
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: bun release-verifier-source/scripts/npm-release.ts promote npm-artifacts.json
@@ -177,11 +201,23 @@ jobs:
         env:
           ACTUAL_REPOSITORY: ${{ github.repository }}
         run: test "${ACTUAL_REPOSITORY}" = "adrouter/adrouter-opencode"
-      - name: Publish beta.3 and mark beta.2 superseded
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - name: Publish the GitHub release and mark a superseded release when configured
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release edit "${{ inputs.tag }}" --repo adrouter/adrouter-opencode --draft=false --prerelease
-          gh release edit v0.1.0-beta.2 --repo adrouter/adrouter-opencode \
-            --title "WITHDRAWN — v0.1.0-beta.2" \
-            --notes "Superseded by v0.1.0-beta.3. Install @adrouter/opencode@beta."
+          prerelease=$(node -p "require('./release-manifest.json').release.githubPrerelease")
+          gh release edit "${{ inputs.tag }}" \
+            --repo adrouter/adrouter-opencode \
+            --draft=false \
+            --prerelease="${prerelease}"
+
+          supersedes=$(node -p "require('./release-manifest.json').release.supersedes ?? ''")
+          if [ -n "${supersedes}" ]; then
+            gh release edit "v${supersedes}" --repo adrouter/adrouter-opencode \
+              --title "WITHDRAWN — v${supersedes}" \
+              --notes "Superseded by ${{ inputs.tag }}. Install @adrouter/opencode@beta."
+          fi

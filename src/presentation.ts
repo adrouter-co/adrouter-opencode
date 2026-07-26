@@ -1,9 +1,9 @@
-import type { AdRouterAd, AdRouterProviderMetadataV1, AdRouterSettlement } from "./contracts.js";
+import type { AdRouterAd, AdRouterProviderMetadataV1 } from "./contracts.js";
 import { sanitizeText } from "./transport/parse.js";
 
 export const ADROUTER_PALETTE = {
-  dark: { background: "#17364a", label: "#8fcfff" },
-  light: { background: "#dcefff", label: "#1769aa" },
+  dark: { label: "#8fcfff" },
+  light: { label: "#1769aa" },
 } as const;
 
 function charWidth(char: string): number {
@@ -60,25 +60,6 @@ export function renderCompactAd(ad: AdRouterAd, width: number): string {
 
 export function formatSubsidy(amount: number): string {
   return amount < 0.01 ? amount.toFixed(6) : amount.toFixed(3);
-}
-
-export function tierACard(
-  ad: AdRouterAd,
-  settlement: AdRouterSettlement,
-): {
-  label: string;
-  content: string;
-  saved?: string;
-} {
-  const cta = sanitizeText(ad.cta);
-  const url = sanitizeText(ad.url);
-  return {
-    label: `${sanitizeText(ad.label, "Sponsored")} · TIER A`,
-    content: `${sanitizeText(ad.title)} — ${sanitizeText(ad.body)}${cta ? ` — ${cta}` : ""}${url ? ` ${url}` : ""}`,
-    ...(typeof settlement.ad_subsidy === "number"
-      ? { saved: `Saved $${formatSubsidy(settlement.ad_subsidy)}` }
-      : {}),
-  };
 }
 
 export function extractAdRouterMetadata(value: unknown): AdRouterProviderMetadataV1 | undefined {

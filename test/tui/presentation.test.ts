@@ -4,7 +4,6 @@ import {
   AdRouterPanelState,
   formatSubsidy,
   renderCompactAd,
-  tierACard,
   truncateVisible,
 } from "../../src/presentation.js";
 
@@ -30,7 +29,26 @@ describe("tiered presentation", () => {
     );
   });
 
-  test("renders NONE and Tier A settlement copy and palette", () => {
+  test("renders every sponsored tier with the same compact shape", () => {
+    for (const tier of ["A", "B", "C"] as const) {
+      expect(
+        renderCompactAd(
+          {
+            id: tier.toLowerCase(),
+            tier,
+            title: "Acme",
+            body: "Ship",
+            cta: "Try it",
+            url: "https://acme.test",
+            label: "Sponsored",
+          },
+          120,
+        ),
+      ).toBe(`TIER ${tier}: Acme — Ship — https://acme.test`);
+    }
+  });
+
+  test("renders NONE and keeps the compact palette and savings formatter", () => {
     expect(
       renderCompactAd(
         {
@@ -43,27 +61,8 @@ describe("tiered presentation", () => {
         120,
       ),
     ).toBe("TIER NONE: No sponsored content — Privacy guardrail");
-
-    expect(
-      tierACard(
-        {
-          id: "a",
-          tier: "A",
-          title: "Acme",
-          body: "Ship",
-          cta: "Try it",
-          url: "https://acme.test",
-          label: "Sponsored",
-        },
-        { ad_subsidy: 0.001234 },
-      ),
-    ).toEqual({
-      label: "Sponsored · TIER A",
-      content: "Acme — Ship — Try it https://acme.test",
-      saved: "Saved $0.001234",
-    });
-    expect(ADROUTER_PALETTE.dark).toEqual({ background: "#17364a", label: "#8fcfff" });
-    expect(ADROUTER_PALETTE.light).toEqual({ background: "#dcefff", label: "#1769aa" });
+    expect(ADROUTER_PALETTE.dark).toEqual({ label: "#8fcfff" });
+    expect(ADROUTER_PALETTE.light).toEqual({ label: "#1769aa" });
     expect(formatSubsidy(0.009)).toBe("0.009000");
     expect(formatSubsidy(0.02)).toBe("0.020");
   });
