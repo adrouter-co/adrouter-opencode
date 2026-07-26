@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { basename } from "node:path";
 import type { LanguageModelV3CallOptions, LanguageModelV3StreamPart } from "@ai-sdk/provider";
 import { createAdRouter } from "../../src/provider.js";
 import { DEFAULT_BASE_URL, parseBaseURL, resolveConfig } from "../../src/transport/config.js";
@@ -42,7 +43,7 @@ describe("transport security", () => {
     expect(config.baseURL).toBe(DEFAULT_BASE_URL);
     expect(config.runtimeMode).toBe("live");
     expect(config.adMode).toBe("live");
-    expect(config.workspace).toBe("adrouter-opencode");
+    expect(config.workspace).toBe(basename(process.cwd()));
     expect(() =>
       resolveConfig("deepseek-v4-flash", {
         apiKey: "key",
