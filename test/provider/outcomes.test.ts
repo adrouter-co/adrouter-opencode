@@ -22,14 +22,16 @@ describe("AdRouter outcomes", () => {
   });
 
   test("clears opt-out, routing failure, and no-inventory outcomes", () => {
-    const ad = (reasonCode: string) => [{
-      id: reasonCode,
-      tier: "C" as const,
-      title: "Sponsor",
-      body: "Body",
-      label: "Sponsored",
-      reasonCode,
-    }];
+    const ad = (reasonCode: string) => [
+      {
+        id: reasonCode,
+        tier: "C" as const,
+        title: "Sponsor",
+        body: "Body",
+        label: "Sponsored",
+        reasonCode,
+      },
+    ];
     expect(normalizeOutcome(ad("user_opt_out"), "live", "live", true)).toEqual({
       status: "off",
       ads: [],

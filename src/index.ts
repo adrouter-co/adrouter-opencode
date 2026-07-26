@@ -1,4 +1,3 @@
-export { createAdRouter } from "./provider.js";
 export type {
   AdRouterAd,
   AdRouterInjection,
@@ -11,3 +10,4 @@ export type {
   AdRouterTier,
   AdRouterUsage,
 } from "./contracts.js";
+export { createAdRouter } from "./provider.js";

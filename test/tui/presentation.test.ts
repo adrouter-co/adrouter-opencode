@@ -31,23 +31,33 @@ describe("tiered presentation", () => {
   });
 
   test("renders NONE and Tier A settlement copy and palette", () => {
-    expect(renderCompactAd({
-      id: "none",
-      tier: "NONE",
-      title: "ignored",
-      body: "Privacy guardrail",
-      label: "TIER NONE",
-    }, 120)).toBe("TIER NONE: No sponsored content — Privacy guardrail");
+    expect(
+      renderCompactAd(
+        {
+          id: "none",
+          tier: "NONE",
+          title: "ignored",
+          body: "Privacy guardrail",
+          label: "TIER NONE",
+        },
+        120,
+      ),
+    ).toBe("TIER NONE: No sponsored content — Privacy guardrail");
 
-    expect(tierACard({
-      id: "a",
-      tier: "A",
-      title: "Acme",
-      body: "Ship",
-      cta: "Try it",
-      url: "https://acme.test",
-      label: "Sponsored",
-    }, { ad_subsidy: 0.001234 })).toEqual({
+    expect(
+      tierACard(
+        {
+          id: "a",
+          tier: "A",
+          title: "Acme",
+          body: "Ship",
+          cta: "Try it",
+          url: "https://acme.test",
+          label: "Sponsored",
+        },
+        { ad_subsidy: 0.001234 },
+      ),
+    ).toEqual({
       label: "Sponsored · TIER A",
       content: "Acme — Ship — Try it https://acme.test",
       saved: "Saved $0.001234",
@@ -58,9 +68,8 @@ describe("tiered presentation", () => {
     expect(formatSubsidy(0.02)).toBe("0.020");
   });
 
-  test("deduplicates cumulative settlement by turn and clears stale ads", () => {
+  test("reconstructs ordered messages, accepts only highest sequences, and clears stale ads", () => {
     const state = new AdRouterPanelState();
-    state.switchSession("s1");
     const settled = {
       adrouter: {
         version: 1,
@@ -72,24 +81,42 @@ describe("tiered presentation", () => {
         settlement: { ad_subsidy: 0.002 },
       },
     };
-    state.ingest("s1", { metadata: settled });
-    state.ingest("s1", { metadata: settled });
-    expect(state.cumulativeSavings()).toBe(0.002);
-    state.ingest("s1", {
-      metadata: {
-        adrouter: {
-          version: 1,
-          sequence: 3,
-          phase: "error",
-          status: "degraded",
-          turnId: "turn-2",
-          ads: [],
-        },
+    const lower = {
+      adrouter: {
+        ...settled.adrouter,
+        sequence: 1,
+        ads: [{ ...tierC, title: "Stale" }],
+        settlement: { ad_subsidy: 99 },
       },
-    });
-    expect(state.snapshot()?.ads).toEqual([]);
+    };
+    state.reconstruct("s1", [
+      { id: "u1", role: "user", parts: [] },
+      {
+        id: "a1",
+        role: "assistant",
+        parts: [{ metadata: settled }, { metadata: lower }, { metadata: settled }],
+      },
+      {
+        id: "a1-late",
+        role: "assistant",
+        parts: [{ metadata: lower }],
+      },
+    ]);
     expect(state.cumulativeSavings()).toBe(0.002);
-    state.switchSession("s2");
+    expect(state.snapshot()?.ads[0]?.title).not.toBe("Stale");
+
+    state.reconstruct("s1", [
+      {
+        id: "a1",
+        role: "assistant",
+        parts: [{ metadata: settled }],
+      },
+      { id: "u2", role: "user", parts: [] },
+    ]);
+    expect(state.snapshot()).toBeUndefined();
+    expect(state.cumulativeSavings()).toBe(0.002);
+
+    state.reconstruct("s2", []);
     expect(state.cumulativeSavings()).toBe(0);
   });
 });

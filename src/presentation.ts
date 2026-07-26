@@ -1,8 +1,4 @@
-import type {
-  AdRouterAd,
-  AdRouterProviderMetadataV1,
-  AdRouterSettlement,
-} from "./contracts.js";
+import type { AdRouterAd, AdRouterProviderMetadataV1, AdRouterSettlement } from "./contracts.js";
 import { sanitizeText } from "./transport/parse.js";
 
 export const ADROUTER_PALETTE = {
@@ -13,8 +9,7 @@ export const ADROUTER_PALETTE = {
 function charWidth(char: string): number {
   const code = char.codePointAt(0) ?? 0;
   if (/\p{Mark}/u.test(char) || code === 0x200d || (code >= 0xfe00 && code <= 0xfe0f)) return 0;
-  return (
-    code >= 0x1100 &&
+  return code >= 0x1100 &&
     (code <= 0x115f ||
       code === 0x2329 ||
       code === 0x232a ||
@@ -27,7 +22,8 @@ function charWidth(char: string): number {
       (code >= 0xffe0 && code <= 0xffe6) ||
       (code >= 0x1f300 && code <= 0x1faff) ||
       (code >= 0x20000 && code <= 0x3fffd))
-  ) ? 2 : 1;
+    ? 2
+    : 1;
 }
 
 export function visibleWidth(value: string): number {
@@ -66,7 +62,10 @@ export function formatSubsidy(amount: number): string {
   return amount < 0.01 ? amount.toFixed(6) : amount.toFixed(3);
 }
 
-export function tierACard(ad: AdRouterAd, settlement: AdRouterSettlement): {
+export function tierACard(
+  ad: AdRouterAd,
+  settlement: AdRouterSettlement,
+): {
   label: string;
   content: string;
   saved?: string;
@@ -105,38 +104,55 @@ export function extractAdRouterMetadata(value: unknown): AdRouterProviderMetadat
   return undefined;
 }
 
+export interface OrderedSessionMessage {
+  id: string;
+  role: "user" | "assistant";
+  parts: Iterable<unknown>;
+}
+
+function highestMetadata(parts: Iterable<unknown>): AdRouterProviderMetadataV1 | undefined {
+  let accepted: AdRouterProviderMetadataV1 | undefined;
+  for (const part of parts) {
+    const snapshot = extractAdRouterMetadata(part);
+    if (!snapshot) continue;
+    if (!accepted || snapshot.sequence > accepted.sequence) accepted = snapshot;
+  }
+  return accepted;
+}
+
 export class AdRouterPanelState {
-  private sessionID: string | undefined;
   private current: AdRouterProviderMetadataV1 | undefined;
   private readonly settlements = new Map<string, number>();
+  private readonly turnSnapshots = new Map<string, AdRouterProviderMetadataV1>();
 
-  switchSession(sessionID: string | undefined, parts: Iterable<unknown> = []): void {
-    if (sessionID === this.sessionID) return;
-    this.sessionID = sessionID;
+  reconstruct(sessionID: string | undefined, messages: Iterable<OrderedSessionMessage>): void {
     this.current = undefined;
     this.settlements.clear();
-    for (const part of parts) this.ingest(sessionID, part);
-  }
-
-  userTurn(sessionID: string): void {
-    if (sessionID !== this.sessionID) return;
-    this.current = undefined;
-  }
-
-  ingest(sessionID: string | undefined, part: unknown): void {
-    if (!sessionID || sessionID !== this.sessionID) return;
-    const snapshot = extractAdRouterMetadata(part);
-    if (!snapshot) return;
-    if (
-      !this.current ||
-      snapshot.turnId !== this.current.turnId ||
-      snapshot.sequence >= this.current.sequence
-    ) {
-      this.current = snapshot;
-    }
-    const subsidy = snapshot.settlement?.ad_subsidy;
-    if (snapshot.turnId && typeof subsidy === "number" && Number.isFinite(subsidy)) {
-      this.settlements.set(snapshot.turnId, subsidy);
+    this.turnSnapshots.clear();
+    if (!sessionID) return;
+    for (const message of messages) {
+      if (message.role === "user") {
+        this.current = undefined;
+        continue;
+      }
+      const accepted = highestMetadata(message.parts);
+      if (!accepted?.turnId) {
+        this.current = accepted;
+        continue;
+      }
+      const prior = this.turnSnapshots.get(accepted.turnId);
+      if (prior && prior.sequence > accepted.sequence) {
+        this.current = prior;
+        continue;
+      }
+      this.current = accepted;
+      this.turnSnapshots.set(accepted.turnId, accepted);
+      const subsidy = accepted.settlement?.ad_subsidy;
+      if (typeof subsidy === "number" && Number.isFinite(subsidy)) {
+        this.settlements.set(accepted.turnId, subsidy);
+      } else {
+        this.settlements.delete(accepted.turnId);
+      }
     }
   }
 

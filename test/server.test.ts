@@ -11,6 +11,16 @@ describe("OpenCode server plugin", () => {
     expect(provider.npm).toBe("@adrouter/opencode");
     expect(provider.env).toEqual(["ADROUTER_API_KEY"]);
     expect(Object.keys(provider.models)).toEqual(["deepseek-v4-flash", "deepseek-v4-pro"]);
+    expect(provider.models["deepseek-v4-flash"]).toMatchObject({
+      id: "deepseek-v4-flash",
+      name: "DeepSeek V4 Flash",
+    });
+    expect(provider.models["deepseek-v4-pro"]).toMatchObject({
+      id: "deepseek-v4-pro",
+      name: "DeepSeek V4 Pro",
+    });
+    // OpenCode 1.18.4 resolves api.id from the configured model id.
+    expect(provider.models["deepseek-v4-flash"].id).toBe("deepseek-v4-flash");
     expect(provider.models["deepseek-v4-flash"].variants).toEqual({
       none: { thinkingLevel: "none" },
       medium: { thinkingLevel: "medium" },
@@ -50,5 +60,10 @@ describe("OpenCode server plugin", () => {
     const hooks = await serverPlugin.server({} as any);
     expect(hooks.auth?.provider).toBe("adrouter");
     expect(hooks.auth?.methods[0]).toMatchObject({ type: "api", label: "AdRouter API key" });
+    const config: Config = {};
+    await hooks.config?.(config);
+    expect((config.provider?.adrouter?.models?.["deepseek-v4-pro"] as any).id).toBe(
+      "deepseek-v4-pro",
+    );
   });
 });

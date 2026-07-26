@@ -1,5 +1,16 @@
 # Changelog
 
-## 0.1.0
+## 0.1.0-beta.1
 
-- Initial AdRouter provider, OpenCode server plugin, and tiered TUI panel.
+- First public OpenCode beta with DeepSeek V4 Flash and Pro model registration.
+- Added fail-closed URL, redirect, header, timeout, size, and sponsor-metadata
+  protections.
+- Rebuilt TUI sponsor and settlement state deterministically from ordered
+  session messages.
+- Added Bun 1.3.14 tooling, Biome 2.5.5, cross-platform CI, protected release
+  and npm publishing workflows, staging canaries, package inspection, and
+  release documentation.
+- Pinned the OpenTUI build chain to patched `brace-expansion@5.0.8` and made
+  complete-history secret scanning self-contained and checksum-verified.
+
+Hosted staging access remains invite-only.

@@ -19,7 +19,10 @@ interface NativeMessage {
   isError?: boolean;
 }
 
-function toolOutput(output: LanguageModelV3ToolResultOutput): { content: unknown; isError: boolean } {
+function toolOutput(output: LanguageModelV3ToolResultOutput): {
+  content: unknown;
+  isError: boolean;
+} {
   switch (output.type) {
     case "text":
     case "json":
@@ -47,14 +50,16 @@ function normalizeAssistant(
 ): NativeMessage {
   const content: Array<Record<string, unknown>> = [];
   for (const part of message.content) {
-    if (part.type === "file") throw new Error("AdRouter does not support file or image prompt parts.");
+    if (part.type === "file")
+      throw new Error("AdRouter does not support file or image prompt parts.");
     if (part.type === "tool-result") {
       throw new Error("Assistant tool results are not supported by the AdRouter transport.");
     }
     if (part.type === "text") content.push({ type: "text", text: part.text });
     if (part.type === "reasoning") content.push({ type: "thinking", thinking: part.text });
     if (part.type === "tool-call") {
-      if (!part.toolCallId || !part.toolName) throw new Error("AdRouter tool calls require stable IDs and names.");
+      if (!part.toolCallId || !part.toolName)
+        throw new Error("AdRouter tool calls require stable IDs and names.");
       const signature = JSON.stringify({ name: part.toolName, input: part.input });
       const prior = calls.get(part.toolCallId);
       if (prior && prior !== signature) {
@@ -92,7 +97,8 @@ export function buildNativeContext(options: LanguageModelV3CallOptions): {
     if (message.role === "user") {
       const text: string[] = [];
       for (const part of message.content) {
-        if (part.type === "file") throw new Error("AdRouter does not support file or image prompt parts.");
+        if (part.type === "file")
+          throw new Error("AdRouter does not support file or image prompt parts.");
         text.push(part.text);
       }
       messages.push({ role: "user", content: text.join("\n") });
@@ -114,7 +120,9 @@ export function buildNativeContext(options: LanguageModelV3CallOptions): {
       });
       const prior = results.get(part.toolCallId);
       if (prior && prior !== signature) {
-        throw new Error(`Conflicting tool results reuse ID ${part.toolCallId} in AdRouter context.`);
+        throw new Error(
+          `Conflicting tool results reuse ID ${part.toolCallId} in AdRouter context.`,
+        );
       }
       if (prior) continue;
       results.set(part.toolCallId, signature);

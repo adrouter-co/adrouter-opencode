@@ -6,9 +6,9 @@ const variants = {
   high: { thinkingLevel: "high" },
 };
 
-function model(name: string) {
+function model(id: string, name: string) {
   return {
-    id: name,
+    id,
     name,
     attachment: false,
     reasoning: true,
@@ -28,8 +28,8 @@ export function applyAdRouterConfig(config: Config): void {
     npm: "@adrouter/opencode",
     env: ["ADROUTER_API_KEY"],
     models: {
-      "deepseek-v4-flash": model("DeepSeek V4 Flash"),
-      "deepseek-v4-pro": model("DeepSeek V4 Pro"),
+      "deepseek-v4-flash": model("deepseek-v4-flash", "DeepSeek V4 Flash"),
+      "deepseek-v4-pro": model("deepseek-v4-pro", "DeepSeek V4 Pro"),
     },
   };
   if (!current) {

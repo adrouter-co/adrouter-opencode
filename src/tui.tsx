@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
-import type { Part } from "@opencode-ai/sdk/v2";
+
 import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui";
+import type { Message } from "@opencode-ai/sdk/v2";
 import { createSignal } from "solid-js";
 import {
   ADROUTER_PALETTE,
@@ -20,14 +21,18 @@ const tui: TuiPlugin = async (api) => {
     return typeof current.params.sessionID === "string" ? current.params.sessionID : undefined;
   }
 
-  function allParts(sessionID: string | undefined): Part[] {
+  function orderedMessages(sessionID: string | undefined) {
     if (!sessionID) return [];
-    return api.state.session.messages(sessionID).flatMap((message) => [...api.state.part(message.id)]);
+    return api.state.session.messages(sessionID).map((message: Message) => ({
+      id: message.id,
+      role: message.role,
+      parts: api.state.part(message.id),
+    }));
   }
 
   function refreshSession(): string | undefined {
     const sessionID = routeSession();
-    state.switchSession(sessionID, allParts(sessionID));
+    state.reconstruct(sessionID, orderedMessages(sessionID));
     return sessionID;
   }
 
@@ -37,16 +42,12 @@ const tui: TuiPlugin = async (api) => {
 
   api.event.on("message.part.updated", (event) => {
     const sessionID = refreshSession();
-    state.ingest(event.properties.sessionID, event.properties.part);
     if (sessionID === event.properties.sessionID) changed();
   });
 
   api.event.on("message.updated", (event) => {
     refreshSession();
-    if (event.properties.info.role === "user") {
-      state.userTurn(event.properties.sessionID);
-      changed();
-    }
+    if (event.properties.info.role === "user") changed();
   });
 
   api.event.on("session.updated", () => {
@@ -73,8 +74,8 @@ const tui: TuiPlugin = async (api) => {
         const ad = snapshot.ads[0];
         const width = Math.max(0, api.renderer.width);
         const palette = ADROUTER_PALETTE[api.theme.mode()];
-        const settledTierA = ad.tier === "A" && snapshot.phase !== "streaming" && snapshot.settlement;
-        const card = settledTierA ? tierACard(ad, snapshot.settlement!) : undefined;
+        const settlement = snapshot.phase === "streaming" ? undefined : snapshot.settlement;
+        const card = ad.tier === "A" && settlement ? tierACard(ad, settlement) : undefined;
         return (
           <box flexDirection="column">
             <text fg={palette.label}>{renderCompactAd(ad, width)}</text>
@@ -90,7 +91,9 @@ const tui: TuiPlugin = async (api) => {
                 {card.saved ? <text fg={palette.label}>{card.saved}</text> : null}
               </box>
             ) : null}
-            {savings > 0 ? <text fg={palette.label}>{`saved $${formatSubsidy(savings)}`}</text> : null}
+            {savings > 0 ? (
+              <text fg={palette.label}>{`saved $${formatSubsidy(savings)}`}</text>
+            ) : null}
           </box>
         );
       },

@@ -12,22 +12,24 @@ import type {
   AdRouterProviderOptions,
   AdRouterUsage,
 } from "./contracts.js";
-import { resolveConfig, type ResolvedAdRouterConfig } from "./transport/config.js";
+import { type ResolvedAdRouterConfig, resolveConfig } from "./transport/config.js";
 import {
+  AdRouterProtocolError,
   assistantContent,
   finishReason,
+  MAX_TOTAL_RESPONSE_BYTES,
   metadata,
   ndjsonLines,
   normalizeOutcome,
+  type ParsedToolCall,
   parseAds,
   parseInjection,
   parseSettlement,
   parseToolCalls,
   parseUsage,
+  type RouterPayload,
   sanitizeText,
   turnId,
-  type ParsedToolCall,
-  type RouterPayload,
 } from "./transport/parse.js";
 import { buildNativeContext } from "./transport/prompt.js";
 
@@ -55,6 +57,9 @@ const EMPTY_USAGE: LanguageModelV3Usage = {
 };
 
 const EMPTY_PUBLIC_USAGE: AdRouterUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+const RESPONSE_HEADER_TIMEOUT_MS = 30_000;
+const MAX_ERROR_BODY_BYTES = 64 * 1024;
+const PROTECTED_HEADERS = new Set(["accept", "authorization", "content-type"]);
 
 function initialState(): StreamState {
   return {
@@ -118,17 +123,43 @@ function bodyFor(
   };
 }
 
+async function readLimitedBody(response: Response, limit: number): Promise<string> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = "";
+  try {
+    while (true) {
+      const item = await reader.read();
+      if (item.done) break;
+      size += item.value.byteLength;
+      if (size > limit) {
+        throw new AdRouterProtocolError("response body exceeded its size limit.");
+      }
+      text += decoder.decode(item.value, { stream: true });
+    }
+    return text + decoder.decode();
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 async function providerError(response: Response): Promise<Error> {
   let message = "";
   try {
-    const value = await response.text();
+    const value = await readLimitedBody(response, MAX_ERROR_BODY_BYTES);
     try {
       const parsed = JSON.parse(value) as Record<string, unknown>;
       message = sanitizeText(parsed.error ?? parsed.message);
     } catch {
       message = sanitizeText(value);
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof AdRouterProtocolError) return error;
     // Ignore an unreadable error response.
   }
   const safe = message.slice(0, 500) || response.statusText || "request failed";
@@ -139,20 +170,52 @@ async function request(
   requestedModel: string,
   providerOptions: AdRouterProviderOptions,
   call: LanguageModelV3CallOptions,
-): Promise<{ response: Response; config: ResolvedAdRouterConfig }> {
+): Promise<{ response: Response; config: ResolvedAdRouterConfig; cleanup: () => void }> {
   const config = resolveConfig(requestedModel, providerOptions, call.maxOutputTokens);
   const headers = new Headers(config.headers);
   for (const [key, value] of Object.entries(call.headers ?? {})) {
-    if (value !== undefined && key.toLowerCase() !== "authorization") headers.set(key, value);
+    if (value !== undefined && !PROTECTED_HEADERS.has(key.toLowerCase())) headers.set(key, value);
   }
-  const response = await config.fetch(`${config.baseURL}/v1/agent/turn`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(bodyFor(requestedModel, config, call)),
-    ...(call.abortSignal ? { signal: call.abortSignal } : {}),
-  });
-  if (!response.ok) throw await providerError(response);
-  return { response, config };
+  const controller = new AbortController();
+  const abort = () => controller.abort(call.abortSignal?.reason);
+  call.abortSignal?.addEventListener("abort", abort, { once: true });
+  const timer = setTimeout(
+    () => controller.abort("response-header-timeout"),
+    RESPONSE_HEADER_TIMEOUT_MS,
+  );
+  let response: Response;
+  try {
+    response = await config.fetch(`${config.baseURL}/v1/agent/turn`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(bodyFor(requestedModel, config, call)),
+      redirect: "manual",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    call.abortSignal?.removeEventListener("abort", abort);
+    if (controller.signal.reason === "response-header-timeout") {
+      throw new AdRouterProtocolError("response header timeout.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel().catch(() => undefined);
+    call.abortSignal?.removeEventListener("abort", abort);
+    throw new AdRouterProtocolError("authenticated requests must not redirect.");
+  }
+  if (!response.ok) {
+    const error = await providerError(response);
+    call.abortSignal?.removeEventListener("abort", abort);
+    throw error;
+  }
+  return {
+    response,
+    config,
+    cleanup: () => call.abortSignal?.removeEventListener("abort", abort),
+  };
 }
 
 function enqueueText(
@@ -237,7 +300,12 @@ function reconcile(
 }
 
 function applyAd(state: StreamState, payload: RouterPayload, config: ResolvedAdRouterConfig): void {
-  const outcome = normalizeOutcome(parseAds(payload.ads, payload.ad), payload.status, config.adMode, config.adsEnabled);
+  const outcome = normalizeOutcome(
+    parseAds(payload.ads, payload.ad),
+    payload.status,
+    config.adMode,
+    config.adsEnabled,
+  );
   const id = turnId(payload);
   const injection = parseInjection(payload.injection);
   nextSnapshot(state, {
@@ -274,14 +342,22 @@ function emitPayload(
       applyAd(state, payload, config);
       return;
     case "text":
-      enqueueText(controller, state, typeof (payload.content ?? payload.delta) === "string"
-        ? String(payload.content ?? payload.delta)
-        : "");
+      enqueueText(
+        controller,
+        state,
+        typeof (payload.content ?? payload.delta) === "string"
+          ? String(payload.content ?? payload.delta)
+          : "",
+      );
       return;
     case "thinking":
-      enqueueReasoning(controller, state, typeof (payload.content ?? payload.delta) === "string"
-        ? String(payload.content ?? payload.delta)
-        : "");
+      enqueueReasoning(
+        controller,
+        state,
+        typeof (payload.content ?? payload.delta) === "string"
+          ? String(payload.content ?? payload.delta)
+          : "",
+      );
       return;
     case "tool_call":
       for (const tool of parseToolCalls([payload.tool_call])) enqueueTool(controller, state, tool);
@@ -291,7 +367,9 @@ function emitPayload(
       return;
     case "done": {
       const final = assistantContent(payload);
-      reconcile(state.reasoning, final.reasoning, "reasoning", (suffix) => enqueueReasoning(controller, state, suffix));
+      reconcile(state.reasoning, final.reasoning, "reasoning", (suffix) =>
+        enqueueReasoning(controller, state, suffix),
+      );
       reconcile(state.text, final.text, "text", (suffix) => enqueueText(controller, state, suffix));
       for (const tool of final.tools) enqueueTool(controller, state, tool);
       state.done = true;
@@ -325,8 +403,16 @@ function finishStream(
   } else if (!state.reasoningStarted) {
     // OpenCode persists provider metadata on content parts. An empty text part is
     // a display-neutral carrier for tool-only and otherwise empty responses.
-    controller.enqueue({ type: "text-start", id: "adrouter-metadata", providerMetadata: finalMetadata });
-    controller.enqueue({ type: "text-end", id: "adrouter-metadata", providerMetadata: finalMetadata });
+    controller.enqueue({
+      type: "text-start",
+      id: "adrouter-metadata",
+      providerMetadata: finalMetadata,
+    });
+    controller.enqueue({
+      type: "text-end",
+      id: "adrouter-metadata",
+      providerMetadata: finalMetadata,
+    });
   }
   controller.enqueue({
     type: "finish",
@@ -340,7 +426,10 @@ function finishStream(
 }
 
 function errorStream(error: unknown): LanguageModelV3StreamResult {
-  const message = sanitizeText(error instanceof Error ? error.message : error, "AdRouter request failed");
+  const message = sanitizeText(
+    error instanceof Error ? error.message : error,
+    "AdRouter request failed",
+  );
   const snapshot: AdRouterProviderMetadataV1 = {
     version: 1,
     sequence: 1,
@@ -377,7 +466,7 @@ async function streamModel(
   } catch (error) {
     return errorStream(error);
   }
-  const { response, config } = requested;
+  const { response, config, cleanup } = requested;
   const responseHeaders = Object.fromEntries(response.headers.entries());
   return {
     response: { headers: responseHeaders },
@@ -388,10 +477,18 @@ async function streamModel(
         try {
           const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
           if (contentType.includes("application/x-ndjson") && response.body) {
-            for await (const payload of ndjsonLines(response.body)) emitPayload(controller, state, payload, config);
-            if (!state.done) throw new Error("AdRouter stream ended without an authoritative done event.");
+            for await (const payload of ndjsonLines(response.body))
+              emitPayload(controller, state, payload, config);
+            if (!state.done)
+              throw new Error("AdRouter stream ended without an authoritative done event.");
           } else {
-            const payload = await response.json() as RouterPayload;
+            const raw = await readLimitedBody(response, MAX_TOTAL_RESPONSE_BYTES);
+            let payload: RouterPayload;
+            try {
+              payload = JSON.parse(raw) as RouterPayload;
+            } catch {
+              throw new AdRouterProtocolError("response contained malformed JSON.");
+            }
             applyAd(state, payload, config);
             if (payload.settlement || payload.usage) applySettlement(state, payload);
             const final = assistantContent(payload);
@@ -403,11 +500,15 @@ async function streamModel(
           }
           finishStream(controller, state);
         } catch (error) {
-          const message = sanitizeText(error instanceof Error ? error.message : error, "AdRouter protocol error");
+          const message = sanitizeText(
+            error instanceof Error ? error.message : error,
+            "AdRouter protocol error",
+          );
           nextSnapshot(state, { phase: "error", status: "degraded", ads: [], error: message });
           controller.enqueue({ type: "error", error: new Error(message) });
           finishStream(controller, state);
         } finally {
+          cleanup();
           controller.close();
         }
       },
@@ -438,16 +539,15 @@ async function generateModel(
         text: "",
         ...(part.providerMetadata ? { providerMetadata: part.providerMetadata } : {}),
       });
-    }
-    else if (part.type === "text-delta") {
+    } else if (part.type === "text-delta") {
       const index = indexes.get(`text:${part.id}`);
       const current = index === undefined ? undefined : content[index];
       if (current?.type === "text") current.text += part.delta;
-    }
-    else if (part.type === "text-end") {
+    } else if (part.type === "text-end") {
       const index = indexes.get(`text:${part.id}`);
       const current = index === undefined ? undefined : content[index];
-      if (current?.type === "text" && part.providerMetadata) current.providerMetadata = part.providerMetadata;
+      if (current?.type === "text" && part.providerMetadata)
+        current.providerMetadata = part.providerMetadata;
     } else if (part.type === "reasoning-start") {
       indexes.set(`reasoning:${part.id}`, content.length);
       content.push({
@@ -455,16 +555,15 @@ async function generateModel(
         text: "",
         ...(part.providerMetadata ? { providerMetadata: part.providerMetadata } : {}),
       });
-    }
-    else if (part.type === "reasoning-delta") {
+    } else if (part.type === "reasoning-delta") {
       const index = indexes.get(`reasoning:${part.id}`);
       const current = index === undefined ? undefined : content[index];
       if (current?.type === "reasoning") current.text += part.delta;
-    }
-    else if (part.type === "reasoning-end") {
+    } else if (part.type === "reasoning-end") {
       const index = indexes.get(`reasoning:${part.id}`);
       const current = index === undefined ? undefined : content[index];
-      if (current?.type === "reasoning" && part.providerMetadata) current.providerMetadata = part.providerMetadata;
+      if (current?.type === "reasoning" && part.providerMetadata)
+        current.providerMetadata = part.providerMetadata;
     } else if (part.type === "tool-call") {
       content.push(part);
     } else if (part.type === "finish") {
@@ -477,9 +576,9 @@ async function generateModel(
   }
   reader.releaseLock();
   return {
-    content: content.filter((part) => !(
-      (part.type === "text" || part.type === "reasoning") && part.text.length === 0
-    )),
+    content: content.filter(
+      (part) => !((part.type === "text" || part.type === "reasoning") && part.text.length === 0),
+    ),
     usage,
     finishReason: finish,
     ...(providerMetadata ? { providerMetadata } : {}),

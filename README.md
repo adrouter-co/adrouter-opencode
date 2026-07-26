@@ -1,6 +1,8 @@
 # @adrouter/opencode
 
-AdRouter provider and tiered sponsorship panel for OpenCode 1.18.4 and later.
+Public beta AdRouter provider and tiered sponsorship panel for OpenCode 1.18.4
+and later. The package is public; hosted staging credentials remain
+invite-only.
 
 The package adds:
 
@@ -16,7 +18,7 @@ messages, tool inputs, tool results, or assistant response text.
 ## Install
 
 ```sh
-opencode plugin @adrouter/opencode
+opencode plugin @adrouter/opencode@beta
 ```
 
 OpenCode detects both package targets:
@@ -79,7 +81,9 @@ opencode
 ```
 
 Custom and local URLs default to mock mode. They may explicitly use `mock` or
-`live`.
+`live`. Custom remote backends must use HTTPS. Plain HTTP is accepted only for
+`localhost`, `127.0.0.1`, and `::1`; URL credentials, redirects, and unsupported
+protocols are rejected.
 
 ## Configuration
 
@@ -94,7 +98,7 @@ const adrouter = createAdRouter({
   runtimeMode: "mock",
   adsEnabled: true,
   minimumTier: "3",
-  workspace: process.cwd(),
+  workspace: "my-project",
   defaultMaxOutputTokens: 4096,
 })
 ```
@@ -106,7 +110,7 @@ Environment variables take precedence where shown:
 | API key | provider `apiKey`, then `ADROUTER_API_KEY` |
 | API URL | `ADROUTER_API_URL`, provider `baseURL`, staging URL |
 | routed model | `ADROUTER_MODEL_ROUTE`, provider model override, requested model |
-| workspace | `ADROUTER_WORKSPACE`, provider workspace, current directory |
+| workspace | `ADROUTER_WORKSPACE`, provider workspace, current folder name |
 | runtime mode | `ADROUTER_RUNTIME_MODE`, provider runtime mode, hosted/live or custom/mock |
 | minimum tier | `ADROUTER_MIN_AD_TIER`, provider minimum tier, `"3"` |
 | ad mode | `ADROUTER_AD_MODE`, provider ad mode, hosted/live or custom/mock |
@@ -116,6 +120,36 @@ Environment variables take precedence where shown:
 `ADROUTER_ADS_ENABLED=false` and `adsEnabled: false` also disable sponsorship.
 
 Per-call output limits are clamped to 4,096 tokens.
+
+Authenticated transport requests do not follow redirects and call-specific
+headers cannot replace authorization, content type, or accept headers. Response
+headers must arrive within 30 seconds, stream chunks within 60 seconds, error
+bodies are capped at 64 KiB, JSON/total streams at 8 MiB, and NDJSON lines at
+1 MiB. Protocol failures cancel the response and clear sponsor metadata.
+
+## Privacy
+
+By default, AdRouter sends the selected model, prompt/context required to
+answer the turn, tool definitions/results, reasoning level, advertising
+preferences, and only the current workspace folder name to the configured
+backend. It does not send the absolute workspace path unless you explicitly set
+`workspace` or `ADROUTER_WORKSPACE`.
+
+Sponsor selection and settlement data return as provider metadata for display.
+Sponsor copy is not inserted into the model context, assistant text, tools, or
+tool results. See [SECURITY.md](SECURITY.md) for reporting and data-handling
+guidance.
+
+## Beta limitations and support
+
+- Hosted access is invite-only and may be revoked during incident response.
+- OpenCode `>=1.18.4 <2` is supported; attachments and provider-executed tool
+  approvals are not.
+- The panel uses OpenCode's `app_bottom` slot; sponsor cards are not persisted
+  inline in the transcript.
+- Staging availability, model inventory, and response latency are beta quality.
+- File issues at <https://github.com/adrouter/adrouter-opencode/issues>. Do not
+  include credentials, prompts, or private response bodies in reports.
 
 ## Panel behavior
 
@@ -150,12 +184,10 @@ No OpenCode patch is required.
 
 ```sh
 bun install
-bun run typecheck
-bun test
-bun run build
-npm pack --dry-run
-npm pack
+bun run release:check
 ```
 
-The npm package contains only built output, this README, the changelog, license,
-and required npm metadata.
+The release check runs Biome, typechecking, coverage-gated tests, build,
+production/development audit policy, manifest validation, tarball inspection,
+an isolated install, and root/server/TUI import smoke tests. See
+[CONTRIBUTING.md](CONTRIBUTING.md) and [RELEASE.md](RELEASE.md).

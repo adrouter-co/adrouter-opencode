@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type {
-  LanguageModelV3CallOptions,
-  LanguageModelV3StreamPart,
-} from "@ai-sdk/provider";
+import type { LanguageModelV3CallOptions, LanguageModelV3StreamPart } from "@ai-sdk/provider";
 import { createAdRouter } from "../../src/provider.js";
 
 const originalEnv = { ...process.env };
@@ -20,38 +17,47 @@ function call(prompt: LanguageModelV3CallOptions["prompt"]): LanguageModelV3Call
   return {
     prompt,
     maxOutputTokens: 9000,
-    tools: [{
-      type: "function",
-      name: "weather",
-      description: "Get weather",
-      inputSchema: {
-        type: "object",
-        properties: { city: { type: "string" } },
-        required: ["city"],
+    tools: [
+      {
+        type: "function",
+        name: "weather",
+        description: "Get weather",
+        inputSchema: {
+          type: "object",
+          properties: { city: { type: "string" } },
+          required: ["city"],
+        },
       },
-    }],
+    ],
     providerOptions: { adrouter: { thinkingLevel: "high" } },
   };
 }
 
 function chunkedNdjson(events: unknown[]): Response {
-  const encoded = new TextEncoder().encode(events.map((event) => JSON.stringify(event)).join("\r\n"));
+  const encoded = new TextEncoder().encode(
+    events.map((event) => JSON.stringify(event)).join("\r\n"),
+  );
   const cuts = [1, 7, 23, 41, 89, encoded.length - 2, encoded.length];
   let offset = 0;
-  return new Response(new ReadableStream({
-    pull(controller) {
-      const end = cuts.shift();
-      if (end === undefined) {
-        controller.close();
-        return;
-      }
-      controller.enqueue(encoded.slice(offset, end));
-      offset = end;
-    },
-  }), { headers: { "content-type": "application/x-ndjson; charset=utf-8" } });
+  return new Response(
+    new ReadableStream({
+      pull(controller) {
+        const end = cuts.shift();
+        if (end === undefined) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(encoded.slice(offset, end));
+        offset = end;
+      },
+    }),
+    { headers: { "content-type": "application/x-ndjson; charset=utf-8" } },
+  );
 }
 
-async function parts(stream: ReadableStream<LanguageModelV3StreamPart>): Promise<LanguageModelV3StreamPart[]> {
+async function parts(
+  stream: ReadableStream<LanguageModelV3StreamPart>,
+): Promise<LanguageModelV3StreamPart[]> {
   const result: LanguageModelV3StreamPart[] = [];
   const reader = stream.getReader();
   while (true) {
@@ -87,7 +93,7 @@ describe("AdRouter LanguageModelV3", () => {
         { type: "text", content: "Hello " },
         {
           type: "tool_call",
-          tool_call: { id: "call-1", function: { name: "weather", arguments: "{\"city\":\"SG\"}" } },
+          tool_call: { id: "call-1", function: { name: "weather", arguments: '{"city":"SG"}' } },
         },
         {
           type: "settlement",
@@ -112,15 +118,27 @@ describe("AdRouter LanguageModelV3", () => {
       workspace: "/work",
     }).languageModel("deepseek-v4-flash");
 
-    const result = await model.doStream(call([
-      { role: "system", content: "Be useful" },
-      { role: "user", content: [{ type: "text", text: "Weather?" }] },
-    ]));
+    const result = await model.doStream(
+      call([
+        { role: "system", content: "Be useful" },
+        { role: "user", content: [{ type: "text", text: "Weather?" }] },
+      ]),
+    );
     const output = await parts(result.stream);
 
     expect(output.filter((part) => part.type === "tool-call")).toHaveLength(1);
-    expect(output.filter((part) => part.type === "text-delta").map((part) => part.delta).join("")).toBe("Hello world");
-    expect(output.filter((part) => part.type === "reasoning-delta").map((part) => part.delta).join("")).toBe("I should check");
+    expect(
+      output
+        .filter((part) => part.type === "text-delta")
+        .map((part) => part.delta)
+        .join(""),
+    ).toBe("Hello world");
+    expect(
+      output
+        .filter((part) => part.type === "reasoning-delta")
+        .map((part) => part.delta)
+        .join(""),
+    ).toBe("I should check");
     const finish = output.find((part) => part.type === "finish");
     expect(finish?.type).toBe("finish");
     if (finish?.type === "finish") {
@@ -148,13 +166,15 @@ describe("AdRouter LanguageModelV3", () => {
       return Response.json({
         turn_id: "turn-json",
         status: "mock",
-        ads: [{
-          id: "ad-c",
-          tier: "C",
-          title: "Tools",
-          body: "A compact sponsor",
-          url: "https://example.test",
-        }],
+        ads: [
+          {
+            id: "ad-c",
+            tier: "C",
+            title: "Tools",
+            body: "A compact sponsor",
+            url: "https://example.test",
+          },
+        ],
         assistant: { reasoning_content: "reason", content: "answer" },
         settlement: { ad_subsidy: 0.02 },
         usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },
@@ -165,19 +185,25 @@ describe("AdRouter LanguageModelV3", () => {
       baseURL: "http://localhost:8787",
       fetch: fetchMock,
     }).languageModel("deepseek-v4-pro");
-    const result = await model.doGenerate(call([
-      {
-        role: "assistant",
-        content: [{
-          type: "text",
-          text: "prior",
-          providerOptions: { adrouter: { ads: [{ title: "must not leak" }] } },
-        }],
-      },
-      { role: "user", content: [{ type: "text", text: "next" }] },
-    ]));
+    const result = await model.doGenerate(
+      call([
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "prior",
+              providerOptions: { adrouter: { ads: [{ title: "must not leak" }] } },
+            },
+          ],
+        },
+        { role: "user", content: [{ type: "text", text: "next" }] },
+      ]),
+    );
 
-    expect(result.content.some((part) => part.type === "text" && part.text === "answer")).toBe(true);
+    expect(result.content.some((part) => part.type === "text" && part.text === "answer")).toBe(
+      true,
+    );
     expect((result.providerMetadata?.adrouter as any).ads[0].tier).toBe("C");
     expect(JSON.stringify(requestBody)).not.toContain("must not leak");
     expect(requestBody?.context.messages).toEqual([
@@ -190,19 +216,21 @@ describe("AdRouter LanguageModelV3", () => {
     const model = createAdRouter({
       apiKey: "key",
       baseURL: "http://localhost:8787",
-      fetch: (async () => chunkedNdjson([
-        {
-          type: "ad",
-          status: "live",
-          ads: [{ id: "ad", tier: "B", title: "Old", body: "Sponsor" }],
-        },
-        { type: "text", content: "abc" },
-        { type: "done", assistant: { content: "xyz" } },
-      ])) as unknown as typeof fetch,
+      fetch: (async () =>
+        chunkedNdjson([
+          {
+            type: "ad",
+            status: "live",
+            ads: [{ id: "ad", tier: "B", title: "Old", body: "Sponsor" }],
+          },
+          { type: "text", content: "abc" },
+          { type: "done", assistant: { content: "xyz" } },
+        ])) as unknown as typeof fetch,
     }).languageModel("deepseek-v4-flash");
-    const output = await parts((await model.doStream(call([
-      { role: "user", content: [{ type: "text", text: "test" }] },
-    ]))).stream);
+    const output = await parts(
+      (await model.doStream(call([{ role: "user", content: [{ type: "text", text: "test" }] }])))
+        .stream,
+    );
     expect(output.some((part) => part.type === "error")).toBe(true);
     const finish = output.find((part) => part.type === "finish");
     if (finish?.type !== "finish") throw new Error("missing finish");
@@ -221,10 +249,16 @@ describe("AdRouter LanguageModelV3", () => {
       adsEnabled: true,
       fetch: (async (_input, init) => {
         body = JSON.parse(String(init?.body));
-        return Response.json({ status: "live", ads: [{ id: "a", tier: "A", title: "x", body: "y" }], assistant: {} });
+        return Response.json({
+          status: "live",
+          ads: [{ id: "a", tier: "A", title: "x", body: "y" }],
+          assistant: {},
+        });
       }) as typeof fetch,
     }).languageModel("deepseek-v4-flash");
-    const result = await model.doGenerate(call([{ role: "user", content: [{ type: "text", text: "x" }] }]));
+    const result = await model.doGenerate(
+      call([{ role: "user", content: [{ type: "text", text: "x" }] }]),
+    );
     expect(body.metadata.ad_mode).toBe("off");
     expect(body.metadata.ads_enabled).toBe(false);
     expect((result.providerMetadata?.adrouter as any).status).toBe("off");
