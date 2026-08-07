@@ -51,11 +51,12 @@ export function renderCompactAd(ad: AdRouterAd, width: number): string {
   const title = sanitizeText(ad.title);
   const body = sanitizeText(ad.body);
   const url = sanitizeText(ad.url);
-  const content =
-    ad.tier === "NONE"
-      ? `No sponsored content — ${body}`
-      : [title, body, url].filter(Boolean).join(" — ");
-  return truncateVisible(`TIER ${ad.tier}: ${content}`, width);
+  if (ad.tier === "NONE") {
+    return truncateVisible(`TIER NONE: No sponsored content — ${body}`, width);
+  }
+  const disclosure = sanitizeText(ad.label, "Sponsored") || "Sponsored";
+  const content = [title, body, url].filter(Boolean).join(" — ");
+  return truncateVisible(`${disclosure} · TIER ${ad.tier}: ${content}`, width);
 }
 
 export function formatSubsidy(amount: number): string {

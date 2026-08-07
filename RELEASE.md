@@ -26,8 +26,8 @@ SSO, authorize the GitHub CLI credential for it.
 
 Create two GitHub environments with required reviewers:
 
-- `adrouter-staging` contains only `ADROUTER_STAGING_API_KEY`, a low-quota revocable staging API
-  credential that can run both hosted model canaries.
+- `adrouter-staging` contains only `ADROUTER_STAGING_INTEGRATION_API_KEY`, a low-quota revocable
+  30-day staging integration credential that can run both hosted model canaries.
 - `npm-publish` contains a temporary `NPM_TOKEN` only during final promotion. Use a granular token
   limited to `@adrouter/opencode`, read/write, automation/bypass-2FA enabled, and valid for no more
   than seven days.
@@ -36,7 +36,7 @@ Enter secrets through an interactive prompt or GitHub UI; never put values in ch
 arguments, logs, source, or release notes:
 
 ```sh
-gh secret set ADROUTER_STAGING_API_KEY --repo adrouter/adrouter-opencode --env adrouter-staging
+gh secret set ADROUTER_STAGING_INTEGRATION_API_KEY --repo adrouter/adrouter-opencode --env adrouter-staging
 gh secret set NPM_TOKEN --repo adrouter/adrouter-opencode --env npm-publish
 ```
 
@@ -130,12 +130,12 @@ deprecates `supersedes`, and publishes GitHub with the manifest's prerelease sta
 The workflow is resumable only when tag, commit, artifact, integrity, and registry metadata are
 exact. Fix workflow defects through protected `main`; never retag or rebuild.
 
-## Beta.4 soak and stable 0.1.0
+## Beta.6 soak and stable 0.1.0
 
-For `0.1.0-beta.4`, finalization must leave both `beta` and `latest` on beta.4, remove `candidate`,
-deprecate beta.3, and publish a GitHub prerelease.
+For `0.1.0-beta.6`, finalization must leave both `beta` and `latest` on beta.6, remove `candidate`,
+deprecate beta.4, and publish a GitHub prerelease.
 
-Start the stable clock at successful beta.4 finalization. For at least 48 hours:
+Start the stable clock at successful beta.6 finalization. For at least 48 hours:
 
 - retain successful anonymous packaged-user workflow evidence for macOS, Linux, and Windows;
 - keep both authenticated model canaries green;
@@ -148,7 +148,7 @@ At or after the 48-hour point, dispatch the non-mutating published-channel verif
 
 ```sh
 gh workflow run soak.yml --repo adrouter/adrouter-opencode --ref main \
-  -f version=0.1.0-beta.4 -f channel=beta
+  -f version=0.1.0-beta.6 -f channel=beta
 ```
 
 Record its successful run URL for the `darwin`, `linux`, and `windows` cohort evidence fields. The
@@ -157,9 +157,9 @@ OpenCode version plus both authenticated canaries.
 
 After a clean soak, the stable PR may modify only `package.json`, `release-manifest.json`,
 `CHANGELOG.md`, `README.md`, `SECURITY.md`, `RELEASE.md`, and `PLAN.md`. Set `version=0.1.0`,
-`latest=0.1.0`, `beta=0.1.0-beta.4`, remove `supersedes`, set `githubPrerelease=false`, and record
+`latest=0.1.0`, `beta=0.1.0-beta.6`, remove `supersedes`, set `githubPrerelease=false`, and record
 the authenticated soak evidence. Source, tests, scripts, workflows, and dependencies must remain
-identical to beta.4. Publish stable through the same candidate and finalization phases.
+identical to beta.6. Publish stable through the same candidate and finalization phases.
 
 ## Independent verification and cleanup
 
@@ -182,8 +182,9 @@ gh release view v<version> --repo adrouter/adrouter-opencode \
   --json isDraft,isPrerelease,url,assets,tagName
 ```
 
-The smoke test must import the root/server/TUI targets, discover both AdRouter models, and recognize
-the `AdRouter API key` auth method without `Unknown provider "adrouter"`.
+The smoke test must import the root/server/TUI targets, discover all eight hosted AdRouter models,
+and recognize the `AdRouter integration API key (adr_int_)` auth method without
+`Unknown provider "adrouter"`.
 
 After each successful beta or stable release, delete the GitHub secret and revoke the corresponding
 npm token in the npm UI. Deleting the GitHub secret does not revoke the registry token:
@@ -198,7 +199,7 @@ Keep the staging key only while canaries remain useful; rotate or revoke it afte
 
 - Before final promotion, leave `beta`/`latest` unchanged, remove or replace only `candidate`,
   deprecate the rejected immutable version, and fix forward.
-- If beta.4 is unusable, release beta.5; never overwrite beta.4.
-- If stable 0.1.0 is invalid, move `latest` back to beta.4, deprecate 0.1.0, and fix forward through
+- If beta.6 is unusable, release beta.7; never overwrite beta.6.
+- If stable 0.1.0 is invalid, move `latest` back to beta.6, deprecate 0.1.0, and fix forward through
   `0.1.1-beta.1` followed by `0.1.1`.
 - Never overwrite, reuse, move, or unpublish an immutable version or Git tag.

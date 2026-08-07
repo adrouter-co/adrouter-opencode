@@ -1,202 +1,238 @@
 # @adrouter/opencode
 
-Public beta AdRouter provider and tiered sponsorship panel for OpenCode 1.18.4
-and later. The package is public; hosted staging credentials remain
-invite-only.
+AdRouter provider and disclosed sponsorship footer for OpenCode `>=1.18.4 <2`.
+The plugin sends text-and-tool turns to the isolated AdRouter integration API,
+keeps sponsor data out of model context, and renders the returned placement in
+OpenCode's `app_bottom` slot after the model turn.
 
-The package adds:
+Hosted integration access is separately gated. Having an AdRouterCLI or
+AdRouterAgent login does not grant this API, and those clients cannot use an
+OpenCode integration key.
 
-- `adrouter/deepseek-v4-flash` and `adrouter/deepseek-v4-pro`
-- AI SDK v3 JSON and NDJSON transport for `/v1/agent/turn`
-- reasoning, tool-call, usage, injection, settlement, and ad metadata support
-- a plugin-only `app_bottom` panel for Tier A, B, C, and NONE outcomes
-- one compact Tier A/B/C footer presentation and per-session cumulative savings
+## What the plugin adds
 
-Sponsor data remains provider metadata. It is never inserted into prompts, model
-messages, tool inputs, tool results, or assistant response text.
+- eight hosted model routes under the `adrouter/` provider;
+- AI SDK v3 JSON and NDJSON transport for `/v1/integrations/turn`;
+- reasoning, function-tool, usage, settlement, and sponsor metadata handling;
+- strict terminal stream ordering: model and tool events, footer ad, settlement,
+  then completion;
+- one compact, explicitly labelled Tier A/B/C footer plus deduplicated session
+  savings;
+- fail-closed URL, redirect, header, timeout, response-size, and protocol checks.
 
-## Install
+Sponsor copy and settlement metadata are display/accounting data only. They are
+never inserted into system prompts, user or assistant messages, tool
+definitions or results, generated commands, patches, or compacted context.
+
+## Availability and install
+
+The repository and package are intended to be public, but hosted account access
+can remain invite-only or disabled per developer. Install an accepted package
+channel only after its release notes identify the integration endpoint:
 
 ```sh
 opencode plugin --global @adrouter/opencode@beta
 ```
 
-The beta channel is the current release channel. After the first stable release, unqualified and
-`@latest` installs select stable `0.1.0` while `@beta` remains on the newest accepted beta.
+OpenCode activates both exported targets:
 
-OpenCode detects both package targets:
+- `@adrouter/opencode/server` registers the provider, models, and auth method;
+- `@adrouter/opencode/tui` renders the footer panel.
 
-- `@adrouter/opencode/server` configures the provider and authentication.
-- `@adrouter/opencode/tui` renders the terminal panel.
+Global installation makes the provider available in every workspace. Omit
+`--global` to scope the plugin to the current project. A direct `npm install`
+does not activate an OpenCode plugin.
 
-The package supports OpenCode `>=1.18.4 <2`.
+## Create the correct key
 
-Global installation is the recommended default so the provider, authentication
-hook, and TUI panel are available from every workspace. To keep AdRouter scoped
-to one Git worktree instead, run the command without `--global` from that
-worktree. A direct `npm install` does not activate an OpenCode plugin.
-
-## Authenticate
-
-Store a key in OpenCode's normal credential store:
+1. Sign in to the AdRouter WebUI.
+2. Open the **Developers** section.
+3. Confirm that an owner has enabled **Integration API access** for the account.
+4. Create an integration key and copy the complete `adr_int_...` value when it
+   is shown. The secret cannot be recovered later.
+5. Store it with OpenCode:
 
 ```sh
 opencode auth login --provider adrouter
 ```
 
-Or configure an environment key:
+The auth prompt is labelled `AdRouter integration API key (adr_int_)`.
+Alternatively, use the dedicated environment variable:
 
 ```sh
-export ADROUTER_API_KEY="your-key"
+export ADROUTER_INTEGRATION_API_KEY="adr_int_..."
 ```
 
-Credential precedence is an OpenCode-injected `apiKey` option followed by
-`ADROUTER_API_KEY`. Authentication is validated by the first provider request.
+Credential precedence is an OpenCode-injected provider `apiKey`, followed by
+`ADROUTER_INTEGRATION_API_KEY`. The legacy `ADROUTER_API_KEY` name is rejected
+with an explanatory error so a CLI or desktop credential is not accidentally
+reused.
+
+Integration keys:
+
+- are scoped only to `/v1/integrations/turn`;
+- expire after 30 days;
+- are returned in full only at creation or rotation;
+- keep the previous secret valid for at most ten minutes during rotation;
+- stop authenticating when revoked, expired, or when the account entitlement is
+  disabled.
+
+They are **not** AdRouterCLI or AdRouterAgent credentials. Those official
+clients use installation-bound authentication and their own endpoint.
 
 ## Select a model
 
-Select either model from OpenCode's provider/model picker:
+The hosted integration catalog exposed by this plugin is:
 
 ```text
 adrouter/deepseek-v4-flash
 adrouter/deepseek-v4-pro
+adrouter/mimo-v2.5
+adrouter/mimo-v2.5-pro
+adrouter/agnes-2.0-flash
+adrouter/agnes-2.5-flash
+adrouter/agnes-2.5-pro
+adrouter/agnes-2.5-pro-alpha
 ```
 
-Both expose `none`, `medium`, and `high` reasoning variants, function tools, a
-1,000,000-token context limit, and a 4,096-token output limit. Attachments are
-intentionally unsupported.
+DeepSeek exposes `none`, `medium`, and `high` reasoning variants. MiMo and
+Agnes Flash expose `none` and `high`; both Agnes Pro routes expose `high`. The
+integration endpoint supports text and function tools only. Image/file prompt
+parts, image tool results, attachments, and provider-executed tool approvals
+are intentionally rejected even when the underlying model has vision support.
 
-## Hosted configuration
+The plugin advertises each Router model's exact 524,288- or 1,048,576-token
+context window and applies a conservative 4,096-token integration output cap.
+Account, provider, and current platform policy may apply lower limits or model
+availability.
 
-The default endpoint is:
+## Endpoint and footer contract
+
+The default API origin is:
 
 ```text
 https://api-staging.adrouter.co
 ```
 
-Official hosted endpoints always use live execution. A hosted endpoint rejects
-`ADROUTER_RUNTIME_MODE=mock`.
+The provider posts only the selected model, reasoning level, output limit, and
+the model conversation/tool context to `/v1/integrations/turn`. It does not send
+workspace names, advertising controls, sponsor metadata from earlier turns, or
+local runtime overrides.
 
-## Local backend
+For NDJSON, the accepted order is:
 
-Point the provider at a local AdRouter backend:
+```text
+thinking/text/tool_call ...
+ad (injection.mode=terminal_trailer, placement=bottom)
+settlement
+done
+```
+
+Duplicate ads, output after the ad, settlement before the ad, missing terminal
+events, and divergent authoritative snapshots fail closed and clear sponsor
+state. JSON responses must contain the equivalent terminal placement,
+settlement, and usage data.
+
+The footer integration receives 25% of the normal computed sponsorship subsidy.
+This lower rate reflects weaker delivery certainty in a third-party host. It is
+recorded by the Router as an integration delivery class; the plugin does not
+calculate or increase it locally.
+
+## Local development backend
+
+Custom remote origins must use HTTPS. Plain HTTP is accepted only for
+`localhost`, `127.0.0.1`, and `::1`. URL credentials and authenticated redirects
+are rejected.
 
 ```sh
-export ADROUTER_API_KEY="local-smoke"
-export ADROUTER_API_URL="http://127.0.0.1:8787"
-export ADROUTER_RUNTIME_MODE="mock"
+export ADROUTER_INTEGRATION_API_KEY="local-test-key"
+export ADROUTER_INTEGRATION_API_URL="http://127.0.0.1:8787"
 opencode
 ```
 
-Custom and local URLs default to mock mode. They may explicitly use `mock` or
-`live`. Custom remote backends must use HTTPS. Plain HTTP is accepted only for
-`localhost`, `127.0.0.1`, and `::1`; URL credentials, redirects, and unsupported
-protocols are rejected.
+Loopback development accepts a non-production test key shape so mocked transport
+tests can run without copying a hosted credential. A real local service profile
+still validates the key against its local database.
 
-## Configuration
-
-The provider factory accepts:
+## Programmatic configuration
 
 ```ts
 import { createAdRouter } from "@adrouter/opencode"
 
 const adrouter = createAdRouter({
-  apiKey: "local-smoke",
+  apiKey: "local-test-key",
   baseURL: "http://127.0.0.1:8787",
-  runtimeMode: "mock",
-  adsEnabled: true,
-  minimumTier: "3",
-  workspace: "my-project",
+  model: "deepseek-v4-flash",
   defaultMaxOutputTokens: 4096,
 })
 ```
 
-Environment variables take precedence where shown:
-
 | Setting | Precedence and default |
 | --- | --- |
-| API key | provider `apiKey`, then `ADROUTER_API_KEY` |
-| API URL | `ADROUTER_API_URL`, provider `baseURL`, staging URL |
-| routed model | `ADROUTER_MODEL_ROUTE`, provider model override, requested model |
-| workspace | `ADROUTER_WORKSPACE`, provider workspace, current folder name |
-| runtime mode | `ADROUTER_RUNTIME_MODE`, provider runtime mode, hosted/live or custom/mock |
-| minimum tier | `ADROUTER_MIN_AD_TIER`, provider minimum tier, `"3"` |
-| ad mode | `ADROUTER_AD_MODE`, provider ad mode, hosted/live or custom/mock |
-| ads enabled | `ADROUTER_ADS_ENABLED`, provider option, `true` |
+| integration key | provider `apiKey`, then `ADROUTER_INTEGRATION_API_KEY` |
+| API origin | `ADROUTER_INTEGRATION_API_URL`, provider `baseURL`, staging origin |
+| routed model | `ADROUTER_MODEL_ROUTE`, provider `model`, requested model |
+| output limit | call limit, provider default, 4,096; always clamped to 4,096 |
 
-`ADROUTER_AD_MODE=off` is a non-overridable safety switch.
-`ADROUTER_ADS_ENABLED=false` and `adsEnabled: false` also disable sponsorship.
+Call-specific headers cannot replace authorization, content type, or accept
+headers. Response headers must arrive within 30 seconds, stream chunks within
+60 seconds, error bodies are capped at 64 KiB, complete responses at 8 MiB,
+and individual NDJSON lines at 1 MiB.
 
-Per-call output limits are clamped to 4,096 tokens.
+## Footer behavior
 
-Authenticated transport requests do not follow redirects and call-specific
-headers cannot replace authorization, content type, or accept headers. Response
-headers must arrive within 30 seconds, stream chunks within 60 seconds, error
-bodies are capped at 64 KiB, JSON/total streams at 8 MiB, and NDJSON lines at
-1 MiB. Protocol failures cancel the response and clear sponsor metadata.
+- Tier A, B, and C share one `Sponsored · TIER …` footer shape.
+- Tier NONE remains visible for a privacy or guardrail outcome.
+- Degraded, malformed, aborted, or incomplete turns clear stale sponsorship.
+- Session savings are deduplicated by AdRouter turn ID.
+- A new user message clears the prior visible placement.
 
-## Privacy
+OpenCode currently provides `app_bottom`, not an after-message transcript slot.
+The placement therefore stays in the bottom panel and never becomes assistant
+text.
 
-By default, AdRouter sends the selected model, prompt/context required to
-answer the turn, tool definitions/results, reasoning level, advertising
-preferences, and only the current workspace folder name to the configured
-backend. It does not send the absolute workspace path unless you explicitly set
-`workspace` or `ADROUTER_WORKSPACE`.
+## Privacy and limitations
 
-Sponsor selection and settlement data return as provider metadata for display.
-Sponsor copy is not inserted into the model context, assistant text, tools, or
-tool results. See [SECURITY.md](SECURITY.md) for reporting and data-handling
-guidance.
+The integration sends the conversation and tool data required to answer the
+turn to the configured Router. Do not submit secrets or data you are not
+authorized to process. Sponsor selection and settlement return only as provider
+metadata for the footer and session accounting.
 
-## Beta limitations and support
-
-- Hosted access is invite-only and may be revoked during incident response.
-- OpenCode `>=1.18.4 <2` is supported; attachments and provider-executed tool
-  approvals are not.
-- The panel uses OpenCode's `app_bottom` slot; sponsor cards are not persisted
-  inline in the transcript.
-- Staging availability, model inventory, and response latency are beta quality.
-- File issues at <https://github.com/adrouter/adrouter-opencode/issues>. Do not
-  include credentials, prompts, or private response bodies in reports.
-
-## Panel behavior
-
-- Tier A, B, and C use the same compact line during routing, generation, and settlement.
-- Tier NONE remains visible for privacy and guardrail outcomes.
-- opt-out, degraded, no-inventory, and routing-failure outcomes clear any prior
-  sponsor immediately.
-- cumulative savings persist for the current session and are deduplicated by
-  AdRouter turn ID.
-
-OpenCode currently exposes `app_bottom` but no after-message transcript slot. Sponsorship therefore
-stays in the bottom panel and never enters the assistant response. No OpenCode patch is required.
+Hosted staging availability, model inventory, entitlements, and latency remain
+pre-release quality. File issues at
+<https://github.com/adrouter/adrouter-opencode/issues> without including keys,
+prompts, private response bodies, or local paths. See [SECURITY.md](SECURITY.md).
 
 ## Troubleshooting
 
-- `Unknown provider "adrouter"`: the plugin is not active in the current config
-  scope. Run `opencode plugin --global @adrouter/opencode@beta`, then retry the
-  login command. Use `opencode models adrouter` to verify registration before
-  entering a credential.
-- `401` or an authentication message: set `ADROUTER_API_KEY` or run
-  `opencode auth login --provider adrouter`.
-- `invalid_model`: select one of the registered AdRouter model IDs or check
-  `ADROUTER_MODEL_ROUTE`.
-- `409` / live provider not configured: configure the upstream provider on the
-  backend, or use a local backend with `ADROUTER_RUNTIME_MODE=mock`.
-- `hosted_mock_not_allowed`: remove mock mode for hosted AdRouter URLs.
-- `routing_failure` or `no_inventory`: the provider response continues without
-  a stale sponsor and the panel clears.
-- malformed or divergent NDJSON: the turn ends with a sanitized protocol error;
-  previously streamed output is never silently rewritten.
+- `Unknown provider "adrouter"`: activate the plugin in the current config
+  scope, then run `opencode models adrouter` before entering a key.
+- integration authentication is not configured: set
+  `ADROUTER_INTEGRATION_API_KEY` or use OpenCode auth login.
+- hosted access requires an `adr_int_` key: create a Developers integration key;
+  do not paste an AdRouterCLI, AdRouterAgent, access, or refresh token.
+- `403 integration_access_required`: an owner must enable the account's
+  integration entitlement; developer access is also required.
+- `invalid_model`: select a registered model and confirm its current account
+  availability.
+- `409 live_not_enabled`: the selected upstream provider is not enabled on that
+  Router environment.
+- malformed or out-of-order NDJSON: the turn ends with a sanitized protocol
+  error; prior streamed output is not silently rewritten and sponsor state is
+  cleared.
 
 ## Development
 
+Use Bun 1.3.14 and keep `bun.lock` authoritative:
+
 ```sh
 bun install --frozen-lockfile
-bun run release:check
+bun run typecheck
+bun test
+bun run build
 ```
 
-The release check runs Biome, typechecking, coverage-gated tests, build,
-production/development audit policy, manifest validation, tarball inspection,
-an isolated install, and root/server/TUI import smoke tests. See
+The full `bun run release:check` additionally runs formatting, coverage,
+auditing, package inspection, isolated imports, and OpenCode registry checks.
+It is a release-readiness command, not a publication command. See
 [CONTRIBUTING.md](CONTRIBUTING.md) and [RELEASE.md](RELEASE.md).

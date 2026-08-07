@@ -25,7 +25,7 @@ describe("tiered presentation", () => {
     expect(truncateVisible("abcdef", 2)).toBe("..");
     expect(truncateVisible("abcdef", 3)).toBe("...");
     expect(renderCompactAd(tierC, 120)).toBe(
-      "TIER C: Developer Tools — Build faster — https://example.test",
+      "Sponsored · TIER C: Developer Tools — Build faster — https://example.test",
     );
   });
 
@@ -44,7 +44,7 @@ describe("tiered presentation", () => {
           },
           120,
         ),
-      ).toBe(`TIER ${tier}: Acme — Ship — https://acme.test`);
+      ).toBe(`Sponsored · TIER ${tier}: Acme — Ship — https://acme.test`);
     }
   });
 

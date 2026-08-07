@@ -2,6 +2,7 @@ import type { AdRouterProviderOptions } from "../contracts.js";
 
 export const DEFAULT_BASE_URL = "https://api-staging.adrouter.co";
 export const MAX_OUTPUT_TOKENS = 4096;
+export const INTEGRATION_KEY_PATTERN = /^adr_int_[A-Za-z0-9_-]{12}\.[A-Za-z0-9_-]{43}$/;
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
 export interface ResolvedAdRouterConfig {
@@ -9,11 +10,6 @@ export interface ResolvedAdRouterConfig {
   baseURL: string;
   hosted: boolean;
   model: string;
-  workspace: string;
-  adMode: string;
-  runtimeMode: "mock" | "live";
-  adsEnabled: boolean;
-  minimumTier: string;
   maxOutputTokens: number;
   fetch: typeof globalThis.fetch;
   headers: Headers;
@@ -60,40 +56,34 @@ function isHostedHostname(value: string): boolean {
   return hostname === "api.adrouter.co" || hostname === "api-staging.adrouter.co";
 }
 
-function enabled(value: string | undefined): boolean {
-  return value?.toLowerCase() !== "false";
-}
-
 export function resolveConfig(
   requestedModel: string,
   options: AdRouterProviderOptions,
   callMaxOutputTokens?: number,
 ): ResolvedAdRouterConfig {
-  const apiKey = options.apiKey?.trim() || env("ADROUTER_API_KEY");
+  const apiKey = options.apiKey?.trim() || env("ADROUTER_INTEGRATION_API_KEY");
   if (!apiKey) {
+    if (env("ADROUTER_API_KEY")) {
+      throw new Error(
+        "ADROUTER_API_KEY is reserved for other AdRouter clients. Create a Developers integration key and set ADROUTER_INTEGRATION_API_KEY.",
+      );
+    }
     throw new Error(
-      "AdRouter authentication is not configured. Set ADROUTER_API_KEY or run `opencode auth login --provider adrouter`.",
+      "AdRouter integration authentication is not configured. Set ADROUTER_INTEGRATION_API_KEY or run `opencode auth login --provider adrouter` with an adr_int_ key from the Developers page.",
     );
   }
 
-  const baseURL = parseBaseURL(env("ADROUTER_API_URL") ?? options.baseURL ?? DEFAULT_BASE_URL);
+  const baseURL = parseBaseURL(
+    env("ADROUTER_INTEGRATION_API_URL") ?? options.baseURL ?? DEFAULT_BASE_URL,
+  );
   const baseURLString = baseURL.toString().replace(/\/$/, "");
   const hosted = isHostedHostname(baseURL.hostname);
-  let configuredRuntime = (env("ADROUTER_RUNTIME_MODE") ?? options.runtimeMode)?.toLowerCase();
-  if (configuredRuntime && !["auto", "mock", "live"].includes(configuredRuntime)) {
-    throw new Error("ADROUTER_RUNTIME_MODE must be auto, mock, or live.");
-  }
-  if (hosted && configuredRuntime === "mock") {
-    throw new Error("AdRouter hosted URLs only support live runtime mode.");
-  }
-  if (!configuredRuntime || configuredRuntime === "auto") {
-    configuredRuntime = hosted ? "live" : "mock";
+  if (hosted && !INTEGRATION_KEY_PATTERN.test(apiKey)) {
+    throw new Error(
+      "Hosted OpenCode access requires an adr_int_ integration key from the AdRouter Developers page. CLI and AdRouterAgent credentials are not accepted.",
+    );
   }
 
-  const environmentAdMode = env("ADROUTER_AD_MODE");
-  const forcedOff = environmentAdMode?.toLowerCase() === "off";
-  const adsEnabled =
-    !forcedOff && enabled(env("ADROUTER_ADS_ENABLED")) && options.adsEnabled !== false;
   const configuredLimit =
     callMaxOutputTokens ?? options.defaultMaxOutputTokens ?? MAX_OUTPUT_TOKENS;
   const maxOutputTokens = Math.max(1, Math.min(MAX_OUTPUT_TOKENS, Math.floor(configuredLimit)));
@@ -108,20 +98,6 @@ export function resolveConfig(
     baseURL: baseURLString,
     hosted,
     model: env("ADROUTER_MODEL_ROUTE") ?? options.model ?? requestedModel,
-    workspace:
-      env("ADROUTER_WORKSPACE") ??
-      options.workspace ??
-      (typeof process === "undefined"
-        ? "."
-        : process
-            .cwd()
-            .replace(/[\\/]+$/, "")
-            .split(/[\\/]/)
-            .pop() || "."),
-    adMode: forcedOff ? "off" : (environmentAdMode ?? options.adMode ?? (hosted ? "live" : "mock")),
-    runtimeMode: hosted ? "live" : (configuredRuntime as "mock" | "live"),
-    adsEnabled,
-    minimumTier: String(env("ADROUTER_MIN_AD_TIER") ?? options.minimumTier ?? "3"),
     maxOutputTokens,
     fetch: options.fetch ?? globalThis.fetch,
     headers,

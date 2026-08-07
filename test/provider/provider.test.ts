@@ -74,6 +74,12 @@ describe("AdRouter LanguageModelV3", () => {
     const fetchMock = (async (_input, init) => {
       requestBody = JSON.parse(String(init?.body));
       return chunkedNdjson([
+        { type: "thinking", delta: "I should " },
+        { type: "text", content: "Hello " },
+        {
+          type: "tool_call",
+          tool_call: { id: "call-1", function: { name: "weather", arguments: '{"city":"SG"}' } },
+        },
         {
           type: "ad",
           ad: {
@@ -86,14 +92,8 @@ describe("AdRouter LanguageModelV3", () => {
               click_url: "https://acme.test",
             },
           },
-          injection: { mode: "display_only", placement: "bottom" },
+          injection: { mode: "terminal_trailer", placement: "bottom" },
           status: "live",
-        },
-        { type: "thinking", delta: "I should " },
-        { type: "text", content: "Hello " },
-        {
-          type: "tool_call",
-          tool_call: { id: "call-1", function: { name: "weather", arguments: '{"city":"SG"}' } },
         },
         {
           type: "settlement",
@@ -115,7 +115,6 @@ describe("AdRouter LanguageModelV3", () => {
       apiKey: "secret",
       baseURL: "http://127.0.0.1:8787",
       fetch: fetchMock,
-      workspace: "/work",
     }).languageModel("deepseek-v4-flash");
 
     const result = await model.doStream(
@@ -148,15 +147,9 @@ describe("AdRouter LanguageModelV3", () => {
       expect((finish.providerMetadata?.adrouter as any).settlement.ad_subsidy).toBe(0.001234);
     }
     expect(requestBody?.thinking_level).toBe("high");
-    expect(requestBody?.runtime_mode).toBe("mock");
+    expect(requestBody?.runtime_mode).toBeUndefined();
     expect(requestBody?.max_output_tokens).toBe(4096);
-    expect(requestBody?.metadata).toEqual({
-      client: "adrouter-opencode",
-      workspace: "/work",
-      ad_mode: "mock",
-      ads_enabled: true,
-      min_ad_tier: "3",
-    });
+    expect(requestBody?.metadata).toBeUndefined();
   });
 
   test("JSON generation preserves raw and normalized ad outcomes without prompt leakage", async () => {
@@ -175,6 +168,7 @@ describe("AdRouter LanguageModelV3", () => {
             url: "https://example.test",
           },
         ],
+        injection: { mode: "terminal_trailer", placement: "bottom" },
         assistant: { reasoning_content: "reason", content: "answer" },
         settlement: { ad_subsidy: 0.02 },
         usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },
@@ -212,18 +206,50 @@ describe("AdRouter LanguageModelV3", () => {
     ]);
   });
 
+  test("rejects model output after the terminal footer and clears the placement", async () => {
+    const model = createAdRouter({
+      apiKey: "key",
+      baseURL: "http://localhost:8787",
+      fetch: (async () =>
+        chunkedNdjson([
+          { type: "text", content: "answer" },
+          {
+            type: "ad",
+            ads: [{ id: "ad", tier: "C", title: "Sponsor", body: "Footer" }],
+            injection: { mode: "terminal_trailer", placement: "bottom" },
+          },
+          { type: "text", content: "must fail" },
+        ])) as unknown as typeof fetch,
+    }).languageModel("deepseek-v4-flash");
+    const output = await parts(
+      (await model.doStream(call([{ role: "user", content: [{ type: "text", text: "test" }] }])))
+        .stream,
+    );
+    expect(output.some((part) => part.type === "error")).toBe(true);
+    const finish = output.find((part) => part.type === "finish");
+    if (finish?.type !== "finish") throw new Error("missing finish");
+    expect(finish.finishReason.unified).toBe("error");
+    expect((finish.providerMetadata?.adrouter as any).ads).toEqual([]);
+  });
+
   test("rejects conflicting authoritative snapshots and clears sponsor metadata", async () => {
     const model = createAdRouter({
       apiKey: "key",
       baseURL: "http://localhost:8787",
       fetch: (async () =>
         chunkedNdjson([
+          { type: "text", content: "abc" },
           {
             type: "ad",
             status: "live",
             ads: [{ id: "ad", tier: "B", title: "Old", body: "Sponsor" }],
+            injection: { mode: "terminal_trailer", placement: "bottom" },
           },
-          { type: "text", content: "abc" },
+          {
+            type: "settlement",
+            settlement: { ad_subsidy: 0.001 },
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          },
           { type: "done", assistant: { content: "xyz" } },
         ])) as unknown as typeof fetch,
     }).languageModel("deepseek-v4-flash");
@@ -239,29 +265,39 @@ describe("AdRouter LanguageModelV3", () => {
     expect((finish.providerMetadata?.adrouter as any).status).toBe("degraded");
   });
 
-  test("environment off switch cannot be overridden", async () => {
-    process.env.ADROUTER_AD_MODE = "off";
+  test("never sends provider metadata from prior assistant parts", async () => {
     let body: any;
     const model = createAdRouter({
       apiKey: "key",
       baseURL: "http://localhost:8787",
-      adMode: "live",
-      adsEnabled: true,
       fetch: (async (_input, init) => {
         body = JSON.parse(String(init?.body));
         return Response.json({
-          status: "live",
-          ads: [{ id: "a", tier: "A", title: "x", body: "y" }],
+          ads: [{ id: "a", tier: "A", title: "x", body: "y", label: "Sponsored" }],
+          injection: { mode: "terminal_trailer", placement: "bottom" },
+          settlement: { ad_subsidy: 0.001 },
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
           assistant: {},
         });
       }) as typeof fetch,
     }).languageModel("deepseek-v4-flash");
     const result = await model.doGenerate(
-      call([{ role: "user", content: [{ type: "text", text: "x" }] }]),
+      call([
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "prior",
+              providerOptions: { adrouter: { ads: [{ title: "must not leak" }] } },
+            },
+          ],
+        },
+        { role: "user", content: [{ type: "text", text: "x" }] },
+      ]),
     );
-    expect(body.metadata.ad_mode).toBe("off");
-    expect(body.metadata.ads_enabled).toBe(false);
-    expect((result.providerMetadata?.adrouter as any).status).toBe("off");
-    expect((result.providerMetadata?.adrouter as any).ads).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain("must not leak");
+    expect(body.metadata).toBeUndefined();
+    expect((result.providerMetadata?.adrouter as any).ads[0].tier).toBe("A");
   });
 });

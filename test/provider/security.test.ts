@@ -1,13 +1,30 @@
 import { describe, expect, test } from "bun:test";
-import { basename } from "node:path";
 import type { LanguageModelV3CallOptions, LanguageModelV3StreamPart } from "@ai-sdk/provider";
 import { createAdRouter } from "../../src/provider.js";
-import { DEFAULT_BASE_URL, parseBaseURL, resolveConfig } from "../../src/transport/config.js";
+import {
+  DEFAULT_BASE_URL,
+  isHostedURL,
+  parseBaseURL,
+  resolveConfig,
+} from "../../src/transport/config.js";
 import { MAX_TOTAL_RESPONSE_BYTES } from "../../src/transport/parse.js";
 
 const prompt: LanguageModelV3CallOptions = {
   prompt: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
 };
+const hostedIntegrationKey = `adr_int_ABCDEFGHIJKL.${"x".repeat(43)}`;
+
+function terminalJson(overrides: Record<string, unknown> = {}) {
+  return {
+    turn_id: "turn-security",
+    assistant: { content: "ok" },
+    ads: [{ id: "ad", tier: "C", title: "Sponsor", body: "Body", label: "Sponsored" }],
+    injection: { mode: "terminal_trailer", placement: "bottom" },
+    settlement: { ad_subsidy: 0.001 },
+    usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    ...overrides,
+  };
+}
 
 async function collect(stream: ReadableStream<LanguageModelV3StreamPart>) {
   const result: LanguageModelV3StreamPart[] = [];
@@ -38,35 +55,64 @@ describe("transport security", () => {
     }
   });
 
-  test("forces hosted live mode and defaults workspace to its basename", () => {
-    const config = resolveConfig("deepseek-v4-flash", { apiKey: "key" });
+  test("requires the dedicated integration credential shape on hosted URLs", () => {
+    expect(isHostedURL(DEFAULT_BASE_URL)).toBe(true);
+    expect(isHostedURL("https://example.com")).toBe(false);
+    expect(isHostedURL("not-a-url")).toBe(false);
+    const config = resolveConfig("deepseek-v4-flash", { apiKey: hostedIntegrationKey });
     expect(config.baseURL).toBe(DEFAULT_BASE_URL);
     expect(config.hosted).toBe(true);
-    expect(config.runtimeMode).toBe("live");
-    expect(config.adMode).toBe("live");
-    expect(config.workspace).toBe(basename(process.cwd()));
-    expect(() =>
-      resolveConfig("deepseek-v4-flash", {
-        apiKey: "key",
-        runtimeMode: "mock",
-      }),
-    ).toThrow("hosted URLs only support live");
+    expect(config.apiKey).toBe(hostedIntegrationKey);
+    expect(() => resolveConfig("deepseek-v4-flash", { apiKey: "adr_at_machine" })).toThrow(
+      "integration key",
+    );
   });
 
-  test("omits local-only execution overrides from hosted requests", async () => {
+  test("rejects missing and legacy general credentials", () => {
+    const integrationKey = process.env.ADROUTER_INTEGRATION_API_KEY;
+    const legacyKey = process.env.ADROUTER_API_KEY;
+    try {
+      delete process.env.ADROUTER_INTEGRATION_API_KEY;
+      delete process.env.ADROUTER_API_KEY;
+      expect(() => resolveConfig("deepseek-v4-flash", {})).toThrow(
+        "integration authentication is not configured",
+      );
+      process.env.ADROUTER_API_KEY = "legacy-client-key";
+      expect(() => resolveConfig("deepseek-v4-flash", {})).toThrow(
+        "reserved for other AdRouter clients",
+      );
+    } finally {
+      if (integrationKey === undefined) delete process.env.ADROUTER_INTEGRATION_API_KEY;
+      else process.env.ADROUTER_INTEGRATION_API_KEY = integrationKey;
+      if (legacyKey === undefined) delete process.env.ADROUTER_API_KEY;
+      else process.env.ADROUTER_API_KEY = legacyKey;
+    }
+  });
+
+  test("uses the isolated endpoint and sends only its strict request contract", async () => {
     let requestBody: Record<string, unknown> | undefined;
+    let requestURL = "";
     const provider = createAdRouter({
-      apiKey: "key",
-      fetch: (async (_input, init) => {
+      apiKey: hostedIntegrationKey,
+      fetch: (async (input, init) => {
+        requestURL = String(input);
         requestBody = JSON.parse(String(init?.body));
-        return Response.json({ assistant: { content: "ok" } });
+        return Response.json(terminalJson());
       }) as typeof fetch,
     });
 
     await provider.languageModel("deepseek-v4-flash").doGenerate(prompt);
 
+    expect(requestURL).toBe(`${DEFAULT_BASE_URL}/v1/integrations/turn`);
     expect(requestBody?.runtime_mode).toBeUndefined();
+    expect(requestBody?.metadata).toBeUndefined();
     expect(requestBody?.tier_override).toBeUndefined();
+    expect(Object.keys(requestBody ?? {}).sort()).toEqual([
+      "context",
+      "max_output_tokens",
+      "model",
+      "thinking_level",
+    ]);
   });
 
   test("protects authenticated headers and disables redirects", async () => {
@@ -76,7 +122,7 @@ describe("transport security", () => {
       baseURL: "http://localhost:8787",
       fetch: (async (_input, init) => {
         request = init;
-        return Response.json({ assistant: { content: "ok" } });
+        return Response.json(terminalJson());
       }) as typeof fetch,
     });
     await provider.languageModel("deepseek-v4-flash").doGenerate({
@@ -143,21 +189,21 @@ describe("transport security", () => {
       apiKey: "key",
       baseURL: "http://localhost:8787",
       fetch: (async () =>
-        Response.json({
-          status: "live",
-          ads: [
-            {
-              id: "i".repeat(500),
-              tier: "A",
-              title: `\u001b[31m${"t".repeat(500)}`,
-              body: "b".repeat(1000),
-              cta: "c".repeat(200),
-              label: "l".repeat(200),
-              url: "http://insecure.example",
-            },
-          ],
-          assistant: { content: "ok" },
-        })) as unknown as typeof fetch,
+        Response.json(
+          terminalJson({
+            ads: [
+              {
+                id: "i".repeat(500),
+                tier: "A",
+                title: `\u001b[31m${"t".repeat(500)}`,
+                body: "b".repeat(1000),
+                cta: "c".repeat(200),
+                label: "l".repeat(200),
+                url: "http://insecure.example",
+              },
+            ],
+          }),
+        )) as unknown as typeof fetch,
     }).languageModel("deepseek-v4-flash");
     const result = await model.doGenerate(prompt);
     const ad = (result.providerMetadata?.adrouter as any).ads[0];
@@ -178,13 +224,7 @@ describe("transport security", () => {
         const body = new ReadableStream<Uint8Array>({
           start(controller) {
             controller.enqueue(
-              new TextEncoder().encode(
-                `${JSON.stringify({
-                  type: "ad",
-                  status: "live",
-                  ads: [{ id: "ad", tier: "C", title: "Sponsor", body: "Body" }],
-                })}\n`,
-              ),
+              new TextEncoder().encode(`${JSON.stringify({ type: "text", content: "partial" })}\n`),
             );
             init?.signal?.addEventListener("abort", () => {
               controller.error(new DOMException("aborted", "AbortError"));

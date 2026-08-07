@@ -106,7 +106,6 @@ jobs:
 
   registry-install:
     name: registry-${{ matrix.os }}-opencode-${{ matrix.opencode }}
-    if: ${{ inputs.phase == 'finalize-release' }}
     needs:
       - release-metadata
       - verify-and-publish

@@ -3,14 +3,23 @@ import type { Config } from "@opencode-ai/plugin";
 import serverPlugin, { applyAdRouterConfig } from "../src/server.js";
 
 describe("OpenCode server plugin", () => {
-  test("registers both models and variants in a fresh config", () => {
+  test("registers the hosted eight-model catalog with endpoint-safe variants", () => {
     const config: Config = {};
     applyAdRouterConfig(config);
     const provider = config.provider?.adrouter as any;
     expect(provider.name).toBe("AdRouter");
     expect(provider.npm).toBe("@adrouter/opencode");
-    expect(provider.env).toEqual(["ADROUTER_API_KEY"]);
-    expect(Object.keys(provider.models)).toEqual(["deepseek-v4-flash", "deepseek-v4-pro"]);
+    expect(provider.env).toEqual(["ADROUTER_INTEGRATION_API_KEY"]);
+    expect(Object.keys(provider.models)).toEqual([
+      "deepseek-v4-flash",
+      "deepseek-v4-pro",
+      "mimo-v2.5",
+      "mimo-v2.5-pro",
+      "agnes-2.0-flash",
+      "agnes-2.5-flash",
+      "agnes-2.5-pro",
+      "agnes-2.5-pro-alpha",
+    ]);
     expect(provider.models["deepseek-v4-flash"]).toMatchObject({
       id: "deepseek-v4-flash",
       name: "DeepSeek V4 Flash",
@@ -26,6 +35,16 @@ describe("OpenCode server plugin", () => {
       medium: { thinkingLevel: "medium" },
       high: { thinkingLevel: "high" },
     });
+    expect(provider.models["mimo-v2.5"].variants).toEqual({
+      none: { thinkingLevel: "none" },
+      high: { thinkingLevel: "high" },
+    });
+    expect(provider.models["agnes-2.5-pro-alpha"].variants).toEqual({
+      high: { thinkingLevel: "high" },
+    });
+    expect(provider.models["mimo-v2.5"].attachment).toBe(false);
+    expect(provider.models["agnes-2.0-flash"].limit).toEqual({ context: 524288, output: 4096 });
+    expect(provider.models["agnes-2.5-pro"].limit).toEqual({ context: 1048576, output: 4096 });
   });
 
   test("preserves configured provider fields, model overrides, and enablement", () => {
@@ -59,7 +78,10 @@ describe("OpenCode server plugin", () => {
   test("exposes an API-key auth hook", async () => {
     const hooks = await serverPlugin.server({} as any);
     expect(hooks.auth?.provider).toBe("adrouter");
-    expect(hooks.auth?.methods[0]).toMatchObject({ type: "api", label: "AdRouter API key" });
+    expect(hooks.auth?.methods[0]).toMatchObject({
+      type: "api",
+      label: "AdRouter integration API key (adr_int_)",
+    });
     const config: Config = {};
     await hooks.config?.(config);
     expect((config.provider?.adrouter?.models?.["deepseek-v4-pro"] as any).id).toBe(
