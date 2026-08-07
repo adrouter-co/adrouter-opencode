@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.1.0-beta.6
+
+- Migrated the provider from the official-client `/v1/agent/turn` contract to the isolated
+  `/v1/integrations/turn` terminal-footer contract.
+- Added dedicated `adr_int_` credential validation and `ADROUTER_INTEGRATION_API_KEY`/
+  `ADROUTER_INTEGRATION_API_URL` configuration, with explicit CLI and desktop separation.
+- Enforced model/tool events followed by one bottom footer ad, settlement, and completion;
+  malformed or reordered streams now fail closed.
+- Registered the eight hosted text-and-tools model routes with their supported reasoning variants
+  and exact Router context windows.
+- Documented the separately gated integration entitlement, 30-day key lifecycle, and 25% subsidy
+  multiplier for lower-certainty footer delivery.
 
 ## 0.1.0-beta.4
 

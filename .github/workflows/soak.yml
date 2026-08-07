@@ -95,5 +95,5 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Authenticated staging canaries
         env:
-          ADROUTER_API_KEY: ${{ secrets.ADROUTER_STAGING_API_KEY }}
+          ADROUTER_INTEGRATION_API_KEY: ${{ secrets.ADROUTER_STAGING_INTEGRATION_API_KEY }}
         run: bun scripts/staging-canary.ts

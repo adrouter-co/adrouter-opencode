@@ -37,7 +37,7 @@ jobs:
       - run: bun run release:check
       - name: Authenticated staging canaries
         env:
-          ADROUTER_API_KEY: ${{ secrets.ADROUTER_STAGING_API_KEY }}
+          ADROUTER_INTEGRATION_API_KEY: ${{ secrets.ADROUTER_STAGING_INTEGRATION_API_KEY }}
         run: bun scripts/staging-canary.ts
       - name: Build and record the immutable release artifact
         run: |

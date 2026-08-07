@@ -67,7 +67,17 @@ if (pluginManifest.version !== "1.18.4") {
 const config: Config = {};
 applyAdRouterConfig(config);
 const models = config.provider?.adrouter?.models ?? {};
-for (const pickerID of ["deepseek-v4-flash", "deepseek-v4-pro"]) {
+const modelIDs = [
+  "deepseek-v4-flash",
+  "deepseek-v4-pro",
+  "mimo-v2.5",
+  "mimo-v2.5-pro",
+  "agnes-2.0-flash",
+  "agnes-2.5-flash",
+  "agnes-2.5-pro",
+  "agnes-2.5-pro-alpha",
+] as const;
+for (const pickerID of modelIDs) {
   const configured = models[pickerID];
   if (!configured) throw new Error(`OpenCode did not register ${pickerID}.`);
   const apiID = configured.id ?? pickerID;
@@ -122,7 +132,7 @@ for (const opencodeVersion of opencodeVersions) {
 
     const listed = await run([...cli, "models", "adrouter", "--verbose"], directory, env);
     success(listed, `OpenCode ${opencodeVersion} provider model resolution`);
-    for (const modelID of ["deepseek-v4-flash", "deepseek-v4-pro"]) {
+    for (const modelID of modelIDs) {
       assert(
         listed.stdout.includes(`adrouter/${modelID}`) &&
           listed.stdout.includes(`"id": "${modelID}"`),
@@ -139,7 +149,7 @@ for (const opencodeVersion of opencodeVersions) {
     assert(auth.exitCode !== 0, "The non-secret auth probe unexpectedly succeeded.");
     assert(
       authOutput.includes('Unknown method "__probe__" for adrouter') &&
-        authOutput.includes("Available: AdRouter API key"),
+        authOutput.includes("Available: AdRouter integration API key (adr_int_)"),
       `OpenCode ${opencodeVersion} did not expose the AdRouter API-key method.\n${authOutput}`,
     );
     assert(

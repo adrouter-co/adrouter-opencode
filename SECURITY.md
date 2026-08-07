@@ -15,7 +15,9 @@ prompts, private response bodies, local paths, or exploit details.
 ## Backend and credentials
 
 The hosted service currently uses `https://api-staging.adrouter.co` and requires an invited
-credential, including when the package reaches stable `0.1.0`. Custom remote backends must use HTTPS. HTTP is accepted only for
+integration entitlement and a dedicated `adr_int_` key, including when the package reaches stable `0.1.0`. The key is scoped to the
+integration endpoint and must not be reused with AdRouterCLI or AdRouterAgent; their machine credentials are likewise invalid here.
+Custom remote backends must use HTTPS. HTTP is accepted only for
 loopback development. Never put credentials in a backend URL, source file,
 issue, screenshot, or log.
 
@@ -26,7 +28,11 @@ timeouts fail closed and clear sponsor metadata.
 ## Privacy
 
 The provider sends model conversation context and tool data needed to complete
-the requested turn. Default workspace metadata is the folder name, not the
-absolute path. Explicit `workspace` and `ADROUTER_WORKSPACE` values are sent as
-provided. Sponsor data remains display-only provider metadata and is not added
-to model context or tool data.
+the requested turn. It does not send workspace names, client advertising
+preferences, or sponsor metadata from prior messages. Sponsor data remains
+display-only provider metadata and is not added to model context or tool data.
+
+The integration endpoint is text-and-tools only. Image/file prompt parts and
+non-text tool results are rejected before transmission. The Router emits a
+terminal footer placement after model/tool output; out-of-order or incomplete
+responses fail closed and clear sponsor state.

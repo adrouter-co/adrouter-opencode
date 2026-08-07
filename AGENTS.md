@@ -1,32 +1,29 @@
 # AdRouter OpenCode repository instructions
 
-## Current hold and repository boundary
+## Current local candidate and repository boundary
 
 This independent repository owns `@adrouter/opencode` and uses Bun. Its GitHub repository is
 `adrouter/adrouter-opencode`; never combine its lockfile, Git history, or release state with CLI or
 Desktop.
 
-OpenCode is intentionally held and non-blocking for the current Router/CLI/Desktop rollout. Public
-beta.4 remains the published version. The substantial user-owned, unreleased beta.5
-installation-auth work is parked in the named `clean-slate-2026-08-02` Git stash so the active
-checkout can remain clean. Do not apply, drop, rewrite, publish, or treat that beta.5 snapshot as
-accepted unless the user explicitly lifts the hold.
+Public beta.4 remains the published version. The substantial user-owned, unreleased beta.5
+installation-auth work remains parked in `stash@{0}` as `clean-slate-2026-08-02`; do not apply,
+drop, rewrite, publish, or treat that snapshot as accepted.
 
-The user's request to maintain this `AGENTS.md` is the only instruction-file exception; it does not
-authorize changes to source, tests, fixtures, schemas, manifests, workflows, lockfile, release
-prose, generated output, or remote state.
+The user explicitly lifted the source hold for the integration-endpoint roadmap on 2026-08-07.
+The active working tree now carries uncommitted beta.6 candidate intent against the isolated
+integration-key contract. That authorization does not include commits, pushes, tags, publication,
+repository-visibility changes, hosted migrations, or deployment.
 
 ## Source map and toolchain
 
 - `src/server.ts` — OpenCode provider/model registration.
 - `src/provider.ts`, `src/contracts.ts`, and `src/transport/` — AI SDK provider, prompt/tool mapping,
   configuration, JSON/NDJSON parsing, and transport protections.
-- `src/auth/`, `src/auth-cli.ts`, fixtures, and schemas — unreleased installation enrollment,
-  storage, proof, refresh, disconnect, and acceptance work.
 - `src/tui.tsx` and `src/presentation.ts` — display-only bottom panel and cumulative savings.
 - `test/`, `scripts/`, and `.github/workflows/` — provider/auth/transport/TUI/release coverage and
   candidate/promotion automation.
-- `release-manifest.json` — local beta.5 intent, not evidence of publication.
+- `release-manifest.json` — local beta.6 intent, not evidence of publication.
 - `dist/`, coverage, tarballs, isolated installs, and acceptance output are generated.
 
 Use Bun 1.3.14 and `bun.lock`; do not add npm, pnpm, or Yarn lockfiles. Preserve OpenCode
@@ -35,32 +32,23 @@ Use Bun 1.3.14 and `bun.lock`; do not add npm, pnpm, or Yarn lockfiles. Preserve
 
 ## Public versus local state
 
-Remote state was verified on 2026-08-01: npm `beta`/`latest` and the published GitHub prerelease are
-`0.1.0-beta.4`; no npm `candidate` exists. The active package manifest is beta.4, based on the
-immutable beta.4 release plus this documentation commit. The stashed beta.5 snapshot is held,
-incompatible with current hosted policy, untested as a release, and unpublished.
+Public npm state was rechecked on 2026-08-07: only beta.2, beta.3, and beta.4 are published, so
+beta.6 is unused. Public `beta`/`latest` remain outside this working tree and no publication claim
+may be inferred from local package metadata.
 
-The active beta.4 plugin and stashed beta.5 snapshot expose only `deepseek-v4-flash` and
-`deepseek-v4-pro` with a declared 1,000,000-token context. Current Router has six models and a
-131,072-token hosted context. Reconcile catalog, reasoning modes, and limits from then-current
-Router source if the hold is lifted; do not silently represent the old declaration as the hosted
-contract.
+The active beta.6 source registers all eight Router model IDs and their exact 524,288- or
+1,048,576-token context windows while enforcing a conservative 4,096-token integration output
+cap. The integration path remains text/tool-only even when the underlying model accepts images.
 
-## Known resume blockers
+## Remaining release blockers
 
-- Router currently rejects the `opencode` hosted client with `client_not_allowed`; source support
-  for the enum/schema is not activation.
-- Local fixture SHA-256 `4a12241eda5d67d803ecb597391a31154af5b11824456a3c458a9390124f53ee`
-  differs from the current Router/CLI/Agent canonical fixture
-  `93a8ec8d4eba38f9165179aa0cdfe3316f8134a882bd0426bd83339af55d17f8`.
-- Enrollment/refresh paths use `error` as a machine code in places, while Router's envelope is
-  `{ error: <safe display message>, code: <machine code> }`.
-- The provider catalog/limits lag the current six-model hosted registry.
-
-If the user lifts the hold, first re-read Router/OpenAPI/auth fixtures and current CLI/Desktop
-contracts; these exact facts may have advanced. Repair compatibility with Router-derived positive
-and negative tests, then select a remotely unused beta. Never add OpenCode back to rollout gates
-solely because its local tests pass.
+- The Router integration endpoint, entitlement, and migration in this workspace are local source;
+  they are not evidence of hosted availability.
+- The beta.6 tree is uncommitted and therefore is not an immutable or reproducible candidate.
+- Public repository visibility, downloadable archives, cross-host acceptance, and hosted canaries
+  were not changed or run under the no-deployment instruction.
+- The complete clean-tree `release:check` remains a future release gate. Local unit, type, lint,
+  build, and release-policy checks do not authorize publication.
 
 ## Product and security invariants
 
@@ -77,18 +65,21 @@ solely because its local tests pass.
 
 ## Verification and releases
 
-While the hold is active, do not run `bun install`, `bun run release:check`, hosted canaries,
-acceptance upload, release soak, tag/publish commands, or dist-tag operations. Source/release tests
-are intentionally not a current completion gate.
-
-After an explicit lift and compatibility repair, use focused `bun test` targets, then:
+During local source work, use focused checks first:
 
 ```sh
-bun install --frozen-lockfile
-bun run release:check
+bun run format
+bun run lint
+bun run typecheck
+bun test
+bun run build
+bun run release:policy
 ```
 
-Only a clean, committed, exact candidate with Router conformance, package inspection, cross-host
-acceptance, and separate release authorization may be tagged/published. Versions and tags are
-immutable; fix forward. Never change protected environments or remote secrets without explicit
-authorization.
+Do not run hosted canaries, acceptance upload, release soak, tag/publish commands, dist-tag
+operations, or repository-visibility changes without explicit authorization. Run the full
+`bun run release:check` only from a clean release-input tree when release readiness is actually in
+scope. Only a clean, committed, exact candidate with Router conformance, package inspection,
+cross-host acceptance, and separate release authorization may be tagged or published. Versions
+and tags are immutable; fix forward. Never change protected environments or remote secrets
+without explicit authorization.

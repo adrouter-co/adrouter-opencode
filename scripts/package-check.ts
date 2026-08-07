@@ -53,6 +53,26 @@ assert(
   soakWorkflow.includes("scripts/verify-channel.ts") && soakWorkflow.includes("staging-canary.ts"),
   "Stable soak workflow must verify the public package and authenticated canaries.",
 );
+for (const workflow of [releaseWorkflow, soakWorkflow]) {
+  assert(
+    workflow.includes(
+      "ADROUTER_INTEGRATION_API_KEY: $" + "{{ secrets.ADROUTER_STAGING_INTEGRATION_API_KEY }}",
+    ),
+    "Authenticated canaries must use the integration-specific environment secret.",
+  );
+  assert(
+    !workflow.includes("ADROUTER_STAGING_API_KEY") && !workflow.includes("ADROUTER_API_KEY:"),
+    "Authenticated canaries must not use a general Router API key name.",
+  );
+}
+const registryInstallJob = publishWorkflow
+  .split("\n  registry-install:")[1]
+  ?.split("\n  finalize-npm:")[0];
+assert(registryInstallJob, "Candidate registry-install job is missing.");
+assert(
+  !registryInstallJob.includes("inputs.phase == 'finalize-release'"),
+  "Anonymous registry installation must run for candidate publication as well as finalization.",
+);
 assert(
   !/0\.1\.0-beta\.\d+/.test(`${releaseWorkflow}\n${publishWorkflow}`),
   "Protected release workflows must not hardcode a numbered beta.",

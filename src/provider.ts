@@ -45,6 +45,8 @@ interface StreamState {
   textStarted: boolean;
   reasoningStarted: boolean;
   attachedMetadata: boolean;
+  adReceived: boolean;
+  settlementReceived: boolean;
   done: boolean;
   usage: LanguageModelV3Usage;
   publicUsage: AdRouterUsage;
@@ -69,6 +71,8 @@ function initialState(): StreamState {
     textStarted: false,
     reasoningStarted: false,
     attachedMetadata: false,
+    adReceived: false,
+    settlementReceived: false,
     done: false,
     usage: EMPTY_USAGE,
     publicUsage: EMPTY_PUBLIC_USAGE,
@@ -110,15 +114,7 @@ function bodyFor(
   return {
     model: config.model || requestedModel,
     thinking_level: reasoningLevel(call),
-    ...(!config.hosted ? { runtime_mode: config.runtimeMode } : {}),
     context: buildNativeContext(call),
-    metadata: {
-      client: "adrouter-opencode",
-      workspace: config.workspace,
-      ad_mode: config.adMode,
-      ads_enabled: config.adsEnabled,
-      min_ad_tier: config.minimumTier,
-    },
     max_output_tokens: config.maxOutputTokens,
   };
 }
@@ -185,7 +181,7 @@ async function request(
   );
   let response: Response;
   try {
-    response = await config.fetch(`${config.baseURL}/v1/agent/turn`, {
+    response = await config.fetch(`${config.baseURL}/v1/integrations/turn`, {
       method: "POST",
       headers,
       body: JSON.stringify(bodyFor(requestedModel, config, call)),
@@ -299,15 +295,15 @@ function reconcile(
   emit(authoritative.slice(current.length));
 }
 
-function applyAd(state: StreamState, payload: RouterPayload, config: ResolvedAdRouterConfig): void {
-  const outcome = normalizeOutcome(
-    parseAds(payload.ads, payload.ad),
-    payload.status,
-    config.adMode,
-    config.adsEnabled,
-  );
-  const id = turnId(payload);
+function applyAd(state: StreamState, payload: RouterPayload): void {
   const injection = parseInjection(payload.injection);
+  if (injection?.mode !== "terminal_trailer" || injection.placement !== "bottom") {
+    throw new AdRouterProtocolError(
+      "the integration response did not declare a terminal bottom placement.",
+    );
+  }
+  const outcome = normalizeOutcome(parseAds(payload.ads, payload.ad), payload.status, "live", true);
+  const id = turnId(payload);
   nextSnapshot(state, {
     phase: "routed",
     status: outcome.status,
@@ -335,13 +331,19 @@ function emitPayload(
   controller: ReadableStreamDefaultController<LanguageModelV3StreamPart>,
   state: StreamState,
   payload: RouterPayload,
-  config: ResolvedAdRouterConfig,
 ): void {
   switch (payload.type) {
-    case "ad":
-      applyAd(state, payload, config);
+    case "ad": {
+      if (state.adReceived || state.settlementReceived || state.done) {
+        throw new AdRouterProtocolError("the integration stream contained a duplicate or late ad.");
+      }
+      applyAd(state, payload);
+      state.adReceived = true;
       return;
+    }
     case "text":
+      if (state.adReceived)
+        throw new AdRouterProtocolError("model output arrived after the terminal ad.");
       enqueueText(
         controller,
         state,
@@ -351,6 +353,8 @@ function emitPayload(
       );
       return;
     case "thinking":
+      if (state.adReceived)
+        throw new AdRouterProtocolError("reasoning output arrived after the terminal ad.");
       enqueueReasoning(
         controller,
         state,
@@ -360,12 +364,25 @@ function emitPayload(
       );
       return;
     case "tool_call":
+      if (state.adReceived)
+        throw new AdRouterProtocolError("a tool call arrived after the terminal ad.");
       for (const tool of parseToolCalls([payload.tool_call])) enqueueTool(controller, state, tool);
       return;
     case "settlement":
+      if (!state.adReceived || state.settlementReceived || state.done) {
+        throw new AdRouterProtocolError(
+          "settlement must appear exactly once after the terminal ad.",
+        );
+      }
       applySettlement(state, payload);
+      state.settlementReceived = true;
       return;
     case "done": {
+      if (!state.adReceived || !state.settlementReceived || state.done) {
+        throw new AdRouterProtocolError(
+          "done must appear exactly once after the terminal ad and settlement.",
+        );
+      }
       const final = assistantContent(payload);
       reconcile(state.reasoning, final.reasoning, "reasoning", (suffix) =>
         enqueueReasoning(controller, state, suffix),
@@ -466,7 +483,7 @@ async function streamModel(
   } catch (error) {
     return errorStream(error);
   }
-  const { response, config, cleanup } = requested;
+  const { response, cleanup } = requested;
   const responseHeaders = Object.fromEntries(response.headers.entries());
   return {
     response: { headers: responseHeaders },
@@ -478,7 +495,7 @@ async function streamModel(
           const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
           if (contentType.includes("application/x-ndjson") && response.body) {
             for await (const payload of ndjsonLines(response.body))
-              emitPayload(controller, state, payload, config);
+              emitPayload(controller, state, payload);
             if (!state.done)
               throw new Error("AdRouter stream ended without an authoritative done event.");
           } else {
@@ -489,8 +506,15 @@ async function streamModel(
             } catch {
               throw new AdRouterProtocolError("response contained malformed JSON.");
             }
-            applyAd(state, payload, config);
-            if (payload.settlement || payload.usage) applySettlement(state, payload);
+            applyAd(state, payload);
+            state.adReceived = true;
+            if (!payload.settlement || !payload.usage) {
+              throw new AdRouterProtocolError(
+                "the integration JSON response omitted settlement or usage.",
+              );
+            }
+            applySettlement(state, payload);
+            state.settlementReceived = true;
             const final = assistantContent(payload);
             enqueueReasoning(controller, state, final.reasoning);
             enqueueText(controller, state, final.text);

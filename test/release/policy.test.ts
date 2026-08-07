@@ -13,19 +13,19 @@ import {
 
 const packageJson = {
   name: "@adrouter/opencode",
-  version: "0.1.0-beta.4",
+  version: "0.1.0-beta.6",
   publishConfig: { tag: "candidate" },
 };
 
 function betaManifest(): ReleasePolicyManifest {
   return {
     schema: 2,
-    version: "0.1.0-beta.4",
+    version: "0.1.0-beta.6",
     release: {
       candidateTag: "candidate",
-      finalTags: { beta: "0.1.0-beta.4", latest: "0.1.0-beta.4" },
+      finalTags: { beta: "0.1.0-beta.6", latest: "0.1.0-beta.6" },
       githubPrerelease: true,
-      supersedes: "0.1.0-beta.3",
+      supersedes: "0.1.0-beta.4",
     },
     npm: { package: "@adrouter/opencode", opencodeVersions: ["1.18.4", "1.18.5"] },
   };
@@ -37,10 +37,10 @@ function stableManifest(): ReleasePolicyManifest {
     version: "0.1.0",
     release: {
       candidateTag: "candidate",
-      finalTags: { beta: "0.1.0-beta.4", latest: "0.1.0" },
+      finalTags: { beta: "0.1.0-beta.6", latest: "0.1.0" },
       githubPrerelease: false,
       soak: {
-        betaVersion: "0.1.0-beta.4",
+        betaVersion: "0.1.0-beta.6",
         startedAt: "2026-07-26T23:59:59.000Z",
         cohortEvidence: {
           darwin: "https://github.com/adrouter/adrouter-opencode/actions/runs/1",
@@ -58,7 +58,7 @@ function git(cwd: string, ...args: string[]): void {
 }
 
 describe("release policy", () => {
-  test("accepts the beta.4 channel policy", () => {
+  test("accepts the beta.6 channel policy", () => {
     expect(releasePolicyFailures(betaManifest(), packageJson)).toEqual([]);
   });
 
@@ -71,11 +71,11 @@ describe("release policy", () => {
   test("reports malformed beta metadata together", () => {
     const manifest = betaManifest();
     manifest.schema = 1;
-    manifest.version = "0.1.0-beta.4+invalid";
+    manifest.version = "0.1.0-beta.6+invalid";
     manifest.release.candidateTag = "latest";
-    manifest.release.finalTags = { next: "0.1.0-beta.4" };
+    manifest.release.finalTags = { next: "0.1.0-beta.6" };
     manifest.release.githubPrerelease = true;
-    manifest.release.supersedes = "0.1.0-beta.4+invalid";
+    manifest.release.supersedes = "0.1.0-beta.6+invalid";
     manifest.release.soak = {};
     manifest.npm.package = "other";
     manifest.npm.opencodeVersions = ["1.18", "1.18"];
@@ -124,11 +124,11 @@ describe("release policy", () => {
       version: "0.1.0",
       release: {
         candidateTag: "candidate",
-        finalTags: { beta: "0.1.0-beta.4", latest: "0.1.0" },
+        finalTags: { beta: "0.1.0-beta.6", latest: "0.1.0" },
         githubPrerelease: false,
         supersedes: "0.1.0-beta.3",
         soak: {
-          betaVersion: "0.1.0-beta.4",
+          betaVersion: "0.1.0-beta.6",
           startedAt: "2026-07-28T23:00:00.000Z",
           cohortEvidence: { linux: "not-a-workflow-url" },
         },
@@ -168,10 +168,10 @@ describe("release policy", () => {
       const stable = stableManifest();
       expect(stableRepositoryFailures(betaManifest(), directory)).toEqual([]);
       expect(stableRepositoryFailures(stable, directory)).toEqual([
-        "Stable release beta baseline tag is missing: v0.1.0-beta.4",
+        "Stable release beta baseline tag is missing: v0.1.0-beta.6",
       ]);
 
-      git(directory, "tag", "v0.1.0-beta.4");
+      git(directory, "tag", "v0.1.0-beta.6");
       writeFileSync(join(directory, "README.md"), "stable\n");
       git(directory, "add", "README.md");
       git(directory, "commit", "-m", "stable metadata");

@@ -2,8 +2,10 @@ import type { LanguageModelV3CallOptions } from "@ai-sdk/provider";
 import { AdRouterPanelState, renderCompactAd } from "../src/presentation.js";
 import { createAdRouter } from "../src/provider.js";
 
-const apiKey = process.env.ADROUTER_API_KEY?.trim();
-if (!apiKey) throw new Error("ADROUTER_API_KEY is required for the staging canary.");
+const apiKey = process.env.ADROUTER_INTEGRATION_API_KEY?.trim();
+if (!apiKey) {
+  throw new Error("ADROUTER_INTEGRATION_API_KEY is required for the staging canary.");
+}
 
 const call: LanguageModelV3CallOptions = {
   prompt: [{ role: "user", content: [{ type: "text", text: "Reply with exactly: canary-ok" }] }],

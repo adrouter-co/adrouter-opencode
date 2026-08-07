@@ -52,15 +52,11 @@ export interface AdRouterProviderMetadata {
 }
 
 export interface AdRouterProviderOptions {
+  /** An adr_int_ integration key. This is not a CLI or desktop installation credential. */
   apiKey?: string;
   baseURL?: string;
   fetch?: typeof globalThis.fetch;
   headers?: HeadersInit;
-  adMode?: string;
-  runtimeMode?: "auto" | "mock" | "live";
-  adsEnabled?: boolean;
-  minimumTier?: AdRouterTier | "1" | "2" | "3";
-  workspace?: string;
   model?: string;
   defaultMaxOutputTokens?: number;
 }
