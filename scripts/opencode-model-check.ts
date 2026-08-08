@@ -42,6 +42,101 @@ function success(result: CommandResult, label: string): void {
   }
 }
 
+async function verifyProviderExecution(
+  cli: string[],
+  directory: string,
+  env: Record<string, string | undefined>,
+  opencodeVersion: string,
+): Promise<void> {
+  let requestMethod = "";
+  let requestPath = "";
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch(request) {
+      requestMethod = request.method;
+      requestPath = new URL(request.url).pathname;
+      return Response.json({
+        turn_id: "provider-probe",
+        status: "live",
+        ads: [],
+        injection: { mode: "terminal_trailer", placement: "bottom" },
+        settlement: { ad_subsidy: 0, cost: {} },
+        usage: { input: 1, output: 1, totalTokens: 2 },
+        assistant: { content: "provider-probe-ok" },
+      });
+    },
+  });
+  try {
+    const result = await run(
+      [
+        ...cli,
+        "run",
+        "--model",
+        "adrouter/mimo-v2.5",
+        "--variant",
+        "none",
+        "--format",
+        "json",
+        "Reply with exactly: provider-probe-ok",
+      ],
+      directory,
+      {
+        ...env,
+        ADROUTER_INTEGRATION_API_URL: server.url.origin,
+        ADROUTER_INTEGRATION_API_KEY: `adr_int_${"A".repeat(12)}.${"B".repeat(43)}`,
+      },
+    );
+    success(result, `OpenCode ${opencodeVersion} provider execution`);
+    assert(requestMethod === "POST", `OpenCode ${opencodeVersion} did not POST the provider turn.`);
+    assert(
+      requestPath === "/v1/integrations/turn",
+      `OpenCode ${opencodeVersion} used the wrong provider route: ${requestPath || "none"}.`,
+    );
+
+    const flags = { assistant: false, bottom: false, done: false, settlement: false, usage: false };
+    const inspect = (value: unknown, key = ""): void => {
+      if (typeof value === "string") {
+        if (/^(text|content|delta)$/i.test(key) && value.includes("provider-probe-ok")) {
+          flags.assistant = true;
+        }
+        return;
+      }
+      if (Array.isArray(value)) {
+        for (const item of value) inspect(item, key);
+        return;
+      }
+      if (!value || typeof value !== "object") return;
+      const record = value as Record<string, unknown>;
+      if (record.phase === "done") flags.done = true;
+      if (record.settlement && typeof record.settlement === "object") flags.settlement = true;
+      if (record.usage && typeof record.usage === "object") flags.usage = true;
+      if (
+        record.injection &&
+        typeof record.injection === "object" &&
+        (record.injection as Record<string, unknown>).mode === "terminal_trailer" &&
+        (record.injection as Record<string, unknown>).placement === "bottom"
+      ) {
+        flags.bottom = true;
+      }
+      for (const [childKey, child] of Object.entries(record)) inspect(child, childKey);
+    };
+    for (const line of result.stdout.split(/\r?\n/)) {
+      try {
+        inspect(JSON.parse(line));
+      } catch {
+        // OpenCode may emit non-JSON status lines around the JSON event stream.
+      }
+    }
+    assert(
+      Object.values(flags).every(Boolean),
+      `OpenCode ${opencodeVersion} omitted terminal provider metadata: ${JSON.stringify(flags)}.`,
+    );
+  } finally {
+    server.stop(true);
+  }
+}
+
 function configuredPlugins(directory: string, name: "opencode" | "tui"): string[] {
   for (const extension of ["jsonc", "json"]) {
     const file = join(directory, `${name}.${extension}`);
@@ -66,6 +161,11 @@ if (pluginManifest.version !== "1.18.4") {
 
 const config: Config = {};
 applyAdRouterConfig(config);
+const expectedProviderPackage = `${releaseManifest.npm.package}@${releaseManifest.version}`;
+assert(
+  config.provider?.adrouter?.npm === expectedProviderPackage,
+  `AdRouter provider package must be exact: ${expectedProviderPackage}.`,
+);
 const models = config.provider?.adrouter?.models ?? {};
 const modelIDs = [
   "deepseek-v4-flash",
@@ -94,6 +194,7 @@ const registryPlugin = process.env.ADROUTER_SMOKE_REGISTRY === "true";
 const pluginSpec =
   requestedPlugin ||
   (registryPlugin ? `${releaseManifest.npm.package}@${releaseManifest.version}` : localPluginURL);
+const registryBackedPlugin = pluginSpec.startsWith(`${releaseManifest.npm.package}@`);
 const opencodeVersions = requestedOpenCode
   ? [requestedOpenCode]
   : releaseManifest.npm.opencodeVersions;
@@ -157,8 +258,12 @@ for (const opencodeVersion of opencodeVersions) {
       `OpenCode ${opencodeVersion} did not register the AdRouter provider.`,
     );
 
+    if (registryBackedPlugin) {
+      await verifyProviderExecution(cli, directory, env, opencodeVersion);
+    }
+
     console.log(
-      `OpenCode ${opencodeVersion} installed both AdRouter targets and recognized provider auth.`,
+      `OpenCode ${opencodeVersion} installed both AdRouter targets, recognized provider auth${registryBackedPlugin ? ", and executed the exact provider package" : ""}.`,
     );
   } finally {
     rmSync(directory, { force: true, recursive: true });
