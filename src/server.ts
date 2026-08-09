@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { Config, Plugin, PluginModule } from "@opencode-ai/plugin";
-
-type ThinkingLevel = "none" | "medium" | "high";
+import { ADROUTER_CODING_MODELS, type AdRouterThinkingLevel } from "./catalog.js";
 
 function providerPackageSpec(): string {
   const manifest = JSON.parse(
@@ -15,7 +14,12 @@ function providerPackageSpec(): string {
 
 const PROVIDER_PACKAGE_SPEC = providerPackageSpec();
 
-function model(id: string, name: string, levels: readonly ThinkingLevel[], context: number) {
+function model(
+  id: string,
+  name: string,
+  levels: readonly AdRouterThinkingLevel[],
+  context: number,
+) {
   const variants = Object.fromEntries(
     levels.map((thinkingLevel) => [thinkingLevel, { thinkingLevel }]),
   );
@@ -34,36 +38,18 @@ function model(id: string, name: string, levels: readonly ThinkingLevel[], conte
 
 export function applyAdRouterConfig(config: Config): void {
   const current = config.provider?.adrouter;
+  const defaultModels = Object.fromEntries(
+    ADROUTER_CODING_MODELS.map((entry) => [
+      entry.id,
+      model(entry.id, entry.name, entry.thinkingLevels, entry.contextWindow),
+    ]),
+  );
   const defaults = {
     id: "adrouter",
     name: "AdRouter",
     npm: PROVIDER_PACKAGE_SPEC,
     env: ["ADROUTER_INTEGRATION_API_KEY"],
-    models: {
-      "deepseek-v4-flash": model(
-        "deepseek-v4-flash",
-        "DeepSeek V4 Flash",
-        ["none", "medium", "high"],
-        1_048_576,
-      ),
-      "deepseek-v4-pro": model(
-        "deepseek-v4-pro",
-        "DeepSeek V4 Pro",
-        ["none", "medium", "high"],
-        1_048_576,
-      ),
-      "mimo-v2.5": model("mimo-v2.5", "MiMo V2.5 Flash", ["none", "high"], 1_048_576),
-      "mimo-v2.5-pro": model("mimo-v2.5-pro", "MiMo V2.5 Pro", ["none", "high"], 1_048_576),
-      "agnes-2.0-flash": model("agnes-2.0-flash", "Agnes 2.0 Flash", ["none", "high"], 524_288),
-      "agnes-2.5-flash": model("agnes-2.5-flash", "Agnes 2.5 Flash", ["none", "high"], 524_288),
-      "agnes-2.5-pro": model("agnes-2.5-pro", "Agnes 2.5 Pro", ["high"], 1_048_576),
-      "agnes-2.5-pro-alpha": model(
-        "agnes-2.5-pro-alpha",
-        "Agnes 2.5 Pro Alpha",
-        ["high"],
-        1_048_576,
-      ),
-    },
+    models: defaultModels,
   };
   if (!current) {
     config.provider = { ...config.provider, adrouter: defaults } as NonNullable<Config["provider"]>;
@@ -73,7 +59,7 @@ export function applyAdRouterConfig(config: Config): void {
   const currentModels = current.models ?? {};
   const mergedModels: Record<string, unknown> = { ...defaults.models };
   for (const [id, configured] of Object.entries(currentModels)) {
-    const fallback = defaults.models[id as keyof typeof defaults.models];
+    const fallback = defaults.models[id];
     mergedModels[id] = fallback
       ? {
           ...fallback,

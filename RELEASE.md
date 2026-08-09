@@ -140,10 +140,10 @@ exact. Fix workflow defects through protected `main`; never retag or rebuild.
 Beta.6 was rejected before channel promotion because its unversioned provider registration resolved
 public beta.4 at execution time. Keep beta.6 immutable and deprecated; never promote or rebuild it.
 
-For `0.1.0-beta.7`, finalization must leave both `beta` and `latest` on beta.7, remove `candidate`,
+For `0.1.0-beta.8`, finalization must leave both `beta` and `latest` on beta.8, remove `candidate`,
 deprecate beta.4, and publish a GitHub prerelease.
 
-Start the stable clock at successful beta.7 finalization. For at least 48 hours:
+Start the stable clock at successful beta.8 finalization. For at least 48 hours:
 
 - retain successful anonymous packaged-user workflow evidence for macOS, Linux, and Windows;
 - keep both authenticated model canaries green;
@@ -156,7 +156,7 @@ At or after the 48-hour point, dispatch the non-mutating published-channel verif
 
 ```sh
 gh workflow run soak.yml --repo adrouter/adrouter-opencode --ref main \
-  -f version=0.1.0-beta.7 -f channel=beta
+  -f version=0.1.0-beta.8 -f channel=beta
 ```
 
 Record its successful run URL for the `darwin`, `linux`, and `windows` cohort evidence fields. The
@@ -165,9 +165,9 @@ OpenCode version plus both authenticated canaries.
 
 After a clean soak, the stable PR may modify only `package.json`, `release-manifest.json`,
 `CHANGELOG.md`, `README.md`, `SECURITY.md`, `RELEASE.md`, and `PLAN.md`. Set `version=0.1.0`,
-`latest=0.1.0`, `beta=0.1.0-beta.7`, remove `supersedes`, set `githubPrerelease=false`, and record
+`latest=0.1.0`, `beta=0.1.0-beta.8`, remove `supersedes`, set `githubPrerelease=false`, and record
 the authenticated soak evidence. Source, tests, scripts, workflows, and dependencies must remain
-identical to beta.7. Publish stable through the same candidate and finalization phases.
+identical to beta.8. Publish stable through the same candidate and finalization phases.
 
 ## Independent verification and cleanup
 
@@ -190,7 +190,7 @@ gh release view v<version> --repo adrouter/adrouter-opencode \
   --json isDraft,isPrerelease,url,assets,tagName
 ```
 
-The smoke test must import the root/server/TUI targets, discover all eight hosted AdRouter models,
+The smoke test must import the root/server/TUI targets, discover all six tool-capable AdRouter models,
 and recognize the `AdRouter integration API key (adr_int_)` auth method without
 `Unknown provider "adrouter"`.
 
@@ -207,8 +207,8 @@ Keep the staging key only while canaries remain useful; rotate or revoke it afte
 
 - Before final promotion, leave `beta`/`latest` unchanged, remove or replace only `candidate`,
   deprecate the rejected immutable version, and fix forward.
-- Beta.6 is rejected; deprecate it after beta.7 candidate verification and never overwrite it.
-- If beta.7 is unusable, release beta.8; never overwrite beta.7.
-- If stable 0.1.0 is invalid, move `latest` back to beta.7, deprecate 0.1.0, and fix forward through
+- Beta.6 is rejected; never overwrite it.
+- If beta.8 is unusable, release beta.9; never overwrite beta.8.
+- If stable 0.1.0 is invalid, move `latest` back to beta.8, deprecate 0.1.0, and fix forward through
   `0.1.1-beta.1` followed by `0.1.1`.
 - Never overwrite, reuse, move, or unpublish an immutable version or Git tag.

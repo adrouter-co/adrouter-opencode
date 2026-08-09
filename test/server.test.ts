@@ -4,7 +4,7 @@ import packageManifest from "../package.json" with { type: "json" };
 import serverPlugin, { applyAdRouterConfig } from "../src/server.js";
 
 describe("OpenCode server plugin", () => {
-  test("registers the hosted eight-model catalog with endpoint-safe variants", () => {
+  test("registers the six tool-capable hosted models with endpoint-safe variants", () => {
     const config: Config = {};
     applyAdRouterConfig(config);
     const provider = config.provider?.adrouter as any;
@@ -18,8 +18,6 @@ describe("OpenCode server plugin", () => {
       "mimo-v2.5-pro",
       "agnes-2.0-flash",
       "agnes-2.5-flash",
-      "agnes-2.5-pro",
-      "agnes-2.5-pro-alpha",
     ]);
     expect(provider.models["deepseek-v4-flash"]).toMatchObject({
       id: "deepseek-v4-flash",
@@ -40,12 +38,10 @@ describe("OpenCode server plugin", () => {
       none: { thinkingLevel: "none" },
       high: { thinkingLevel: "high" },
     });
-    expect(provider.models["agnes-2.5-pro-alpha"].variants).toEqual({
-      high: { thinkingLevel: "high" },
-    });
     expect(provider.models["mimo-v2.5"].attachment).toBe(false);
     expect(provider.models["agnes-2.0-flash"].limit).toEqual({ context: 524288, output: 4096 });
-    expect(provider.models["agnes-2.5-pro"].limit).toEqual({ context: 1048576, output: 4096 });
+    expect(provider.models["agnes-2.5-pro"]).toBeUndefined();
+    expect(provider.models["agnes-2.5-pro-alpha"]).toBeUndefined();
   });
 
   test("preserves configured provider fields, model overrides, and enablement", () => {
