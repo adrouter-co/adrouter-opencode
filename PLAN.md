@@ -1,97 +1,47 @@
-# Plan: OpenCode Integration Endpoint Candidate Source
+# Plan: OpenCode Beta.7 Exact-Provider Fix Forward
 
 ## Goal
 
-Prepare local `@adrouter/opencode@0.1.0-beta.6` source for the isolated Router integration API and
-bottom-footer sponsorship contract, without committing, publishing, tagging, pushing, changing
-repository visibility, or deploying either side of the contract.
+Release `@adrouter/opencode@0.1.0-beta.7` as the immutable replacement for rejected beta.6, then
+promote `beta`/`latest` only after an authenticated OpenCode turn passes.
 
 ## Context
 
-- Public beta.4 remains the last published OpenCode package; beta.6 was verified unused.
-- The unrelated beta.5 installation-auth experiment remains untouched in
-  `stash@{0}: clean-slate-2026-08-02`.
-- Router integration endpoint, key entitlement, and migration work are local source only. A passing
-  plugin test does not establish hosted access.
-- The workspace-level roadmap and validation record live in
-  `/Users/ahmadzuhri/antigravity/3days/PLAN.md`.
+- Public `beta`/`latest` remain beta.4, which uses `/v1/agent/turn` and cannot use integration keys.
+- Beta.6 correctly implemented `/v1/integrations/turn`, but registered its executable provider as
+  unversioned `@adrouter/opencode`; OpenCode therefore resolved public beta.4 at turn time.
+- A temporary exact beta.6 provider override passed assistant, terminal-bottom, settlement, and
+  usage acceptance on OpenCode 1.18.15. Public channels were not moved.
+- The unrelated beta.5 installation-auth stash remains untouched.
 
 ## Constraints
 
-- Sponsor and settlement data remain display/accounting metadata only.
-- Use only `ADROUTER_INTEGRATION_API_KEY` / `adr_int_` credentials for hosted integration access.
-- Preserve the `adrouter` provider/plugin IDs and root, `./server`, and `./tui` exports.
-- Preserve Bun 1.3.14, the authoritative `bun.lock`, strict transport bounds, and OpenCode
-  `>=1.18.4 <2` compatibility.
-- Do not mutate the stash, npm channels, GitHub state, hosted services, or release credentials.
+- Bind the executable provider to the plugin package's own exact version.
+- Preserve the dedicated `adr_int_` integration credential, staging endpoint, text/tool-only
+  mapping, 4,096-token output cap, and display-only sponsor metadata.
+- Never overwrite beta.6 or move `beta`/`latest` before beta.7 candidate acceptance.
 
-## Step A: Reconcile the provider contract
+## Steps
 
-### Status
+1. Add exact provider-package registration and unit/package regression coverage.
+2. Add registry-backed OpenCode execution checks for the integration path and terminal metadata.
+3. Validate beta.7 with Bun 1.3.14 and OpenCode 1.18.4/1.18.15.
+4. Merge through protected main, tag once, stage, and publish only to `candidate`.
+5. Install the exact candidate locally and require a redacted authenticated staging turn to pass.
+6. Deprecate rejected beta.6, finalize beta.7 to `beta`/`latest`, and begin the 48-hour soak.
 
-`done`
+## Validation Results
 
-### Completed Work
-
-- Switched transport to endpoint-scoped `POST /v1/integrations/turn` authentication.
-- Registered all eight Router model IDs, exact context windows, and reasoning variants.
-- Kept integration prompts text/tool-only with a conservative 4,096-token output cap.
-- Rejected legacy CLI/Desktop credential names and shapes on hosted origins.
-
-### Validation Results
-
-- `bun run lint`: passed.
-- `bun run typecheck`: passed.
-- `bun test`: passed, 33 tests.
-
-## Step B: Enforce terminal footer delivery
-
-### Status
-
-`done`
-
-### Completed Work
-
-- Enforced model/tool events before the terminal ad, followed by settlement and done.
-- Rejected duplicate, missing, divergent, or out-of-order terminal snapshots.
-- Kept all sponsorship out of assistant and tool content.
-- Preserved compact Tier A/B/C footer presentation, stale-state clearing, and deduplicated savings.
-
-### Validation Results
-
-- Provider/security/presentation suites are included in the passing 33-test run.
-- `bun run build`: passed.
-
-## Step C: Record beta.6 candidate intent
-
-### Status
-
-`done_local_source`
-
-### Completed Work
-
-- Updated package, changelog, security, release, README, and manifest metadata to beta.6 intent.
-- Set candidate-first local release policy without changing any public tag or package.
-- Documented key lifecycle, 25% subsidy, endpoint isolation, model catalog, and hosted limitations.
-
-### Validation Results
-
-- `bun run release:policy`: passed.
-- `git diff --check`: passed.
-- Full `bun run release:check`: intentionally not run from the dirty, no-release working tree.
-
-## Follow-up Work
-
-- Commit and review Router and OpenCode inputs independently.
-- Apply the Router migration and deploy the endpoint only with separate authorization.
-- Run clean-tree package inspection, OpenCode compatibility checks, hosted canaries, and
-  cross-platform acceptance.
-- Change GitHub visibility and publish immutable beta.6 only with explicit release authorization.
+- Root-cause reproduction: beta.6 default execution reached machine auth; exact beta.6 provider
+  override completed assistant, terminal-bottom, settlement, and usage acceptance.
+- Beta.7 lint, typecheck, 34 unit tests, build, release policy, packed-package inspection, and
+  isolated OpenCode 1.18.4/1.18.15 install/discovery checks pass locally.
+- Protected clean-tree checks, hosted canaries, registry execution matrix, and final channel
+  verification remain release gates.
 
 ## Decision Log
 
 | Date | Decision | Rationale | Impact |
 | --- | --- | --- | --- |
-| 2026-08-07 | Use a dedicated integration key and endpoint. | Prevent CLI/Desktop credential reuse and route widening. | Hosted OpenCode accepts only `adr_int_` integration keys. |
-| 2026-08-07 | Keep sponsorship in terminal metadata. | Protect model, assistant, and tool context. | The plugin renders `app_bottom` after model output. |
-| 2026-08-07 | Use beta.6 for local candidate intent. | Beta.5 remains held and package versions are immutable. | No public channel changed. |
+| 2026-08-08 | Reject beta.6 before channel promotion. | OpenCode executed beta.4 through the unversioned provider registration. | Beta.6 remains immutable and must be deprecated. |
+| 2026-08-08 | Fix forward as beta.7 with an exact provider spec. | Plugin and provider artifacts must share one version across candidate and channel installs. | Registry acceptance now exercises a real local integration turn. |

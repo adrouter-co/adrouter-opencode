@@ -39,6 +39,9 @@ OpenCode activates both exported targets:
 - `@adrouter/opencode/server` registers the provider, models, and auth method;
 - `@adrouter/opencode/tui` renders the footer panel.
 
+The server target binds the executable AI provider to the same exact package version. This keeps
+candidate and pinned installs from falling back to an older `latest` provider artifact.
+
 Global installation makes the provider available in every workspace. Omit
 `--global` to scope the plugin to the current project. A direct `npm install`
 does not activate an OpenCode plugin.

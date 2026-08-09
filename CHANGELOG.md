@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-beta.7
+
+- Bound OpenCode's registered AI provider to the plugin's own exact package version so candidate
+  installs cannot silently execute an older `latest` provider artifact.
+- Added a registry-backed OpenCode execution probe that asserts `POST /v1/integrations/turn`,
+  terminal-bottom metadata, settlement, usage, and assistant output across the release matrix.
+- Replaced the rejected beta.6 candidate without moving the public `beta` or `latest` channels.
+
 ## 0.1.0-beta.6
 
 - Migrated the provider from the official-client `/v1/agent/turn` contract to the isolated
@@ -12,6 +20,8 @@
   and exact Router context windows.
 - Documented the separately gated integration entitlement, 30-day key lifecycle, and 25% subsidy
   multiplier for lower-certainty footer delivery.
+- Rejected before channel promotion because OpenCode resolved the unversioned provider package to
+  public beta.4 and therefore called the machine-auth endpoint.
 
 ## 0.1.0-beta.4
 

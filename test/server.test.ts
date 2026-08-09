@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Config } from "@opencode-ai/plugin";
+import packageManifest from "../package.json" with { type: "json" };
 import serverPlugin, { applyAdRouterConfig } from "../src/server.js";
 
 describe("OpenCode server plugin", () => {
@@ -8,7 +9,7 @@ describe("OpenCode server plugin", () => {
     applyAdRouterConfig(config);
     const provider = config.provider?.adrouter as any;
     expect(provider.name).toBe("AdRouter");
-    expect(provider.npm).toBe("@adrouter/opencode");
+    expect(provider.npm).toBe(`${packageManifest.name}@${packageManifest.version}`);
     expect(provider.env).toEqual(["ADROUTER_INTEGRATION_API_KEY"]);
     expect(Object.keys(provider.models)).toEqual([
       "deepseek-v4-flash",

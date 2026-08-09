@@ -1,17 +1,17 @@
 {
   "schema": 2,
-  "version": "0.1.0-beta.6",
+  "version": "0.1.0-beta.7",
   "release": {
     "candidateTag": "candidate",
     "finalTags": {
-      "beta": "0.1.0-beta.6",
-      "latest": "0.1.0-beta.6"
+      "beta": "0.1.0-beta.7",
+      "latest": "0.1.0-beta.7"
     },
     "githubPrerelease": true,
     "supersedes": "0.1.0-beta.4"
   },
   "npm": {
     "package": "@adrouter/opencode",
-    "opencodeVersions": ["1.18.4", "1.18.5"]
+    "opencodeVersions": ["1.18.4", "1.18.15"]
   }
 }

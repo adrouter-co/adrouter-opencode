@@ -25,6 +25,9 @@ Authenticated requests reject redirects and ignore call-level attempts to
 replace authorization, content type, or accept headers. Response limits and
 timeouts fail closed and clear sponsor metadata.
 
+The OpenCode server target and executable provider must resolve to the same exact package version.
+A version mismatch is release-blocking because it can cross the integration/machine-auth boundary.
+
 ## Privacy
 
 The provider sends model conversation context and tool data needed to complete

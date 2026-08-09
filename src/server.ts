@@ -1,6 +1,19 @@
+import { readFileSync } from "node:fs";
 import type { Config, Plugin, PluginModule } from "@opencode-ai/plugin";
 
 type ThinkingLevel = "none" | "medium" | "high";
+
+function providerPackageSpec(): string {
+  const manifest = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  ) as { name?: unknown; version?: unknown };
+  if (manifest.name !== "@adrouter/opencode" || typeof manifest.version !== "string") {
+    throw new Error("The AdRouter package identity is invalid.");
+  }
+  return `${manifest.name}@${manifest.version}`;
+}
+
+const PROVIDER_PACKAGE_SPEC = providerPackageSpec();
 
 function model(id: string, name: string, levels: readonly ThinkingLevel[], context: number) {
   const variants = Object.fromEntries(
@@ -24,7 +37,7 @@ export function applyAdRouterConfig(config: Config): void {
   const defaults = {
     id: "adrouter",
     name: "AdRouter",
-    npm: "@adrouter/opencode",
+    npm: PROVIDER_PACKAGE_SPEC,
     env: ["ADROUTER_INTEGRATION_API_KEY"],
     models: {
       "deepseek-v4-flash": model(

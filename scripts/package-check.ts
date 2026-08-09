@@ -135,7 +135,7 @@ try {
     [
       "bun",
       "-e",
-      "await import('@adrouter/opencode'); await import('@adrouter/opencode/server'); await import('@adrouter/opencode/tui')",
+      `await import('@adrouter/opencode'); const server = await import('@adrouter/opencode/server'); await import('@adrouter/opencode/tui'); const config = {}; server.applyAdRouterConfig(config); if (config.provider?.adrouter?.npm !== ${JSON.stringify(`${manifest.name}@${manifest.version}`)}) throw new Error('Packed provider package is not exact')`,
     ],
     installDirectory,
   );
