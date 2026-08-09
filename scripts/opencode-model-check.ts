@@ -174,8 +174,6 @@ const modelIDs = [
   "mimo-v2.5-pro",
   "agnes-2.0-flash",
   "agnes-2.5-flash",
-  "agnes-2.5-pro",
-  "agnes-2.5-pro-alpha",
 ] as const;
 for (const pickerID of modelIDs) {
   const configured = models[pickerID];

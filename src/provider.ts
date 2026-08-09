@@ -7,6 +7,7 @@ import type {
   LanguageModelV3StreamResult,
   LanguageModelV3Usage,
 } from "@ai-sdk/provider";
+import { defaultThinkingLevel } from "./catalog.js";
 import type {
   AdRouterProviderMetadataV1,
   AdRouterProviderOptions,
@@ -98,12 +99,15 @@ function firstMetadata(state: StreamState) {
   return metadata(state.snapshot);
 }
 
-function reasoningLevel(options: LanguageModelV3CallOptions): "none" | "medium" | "high" {
+function reasoningLevel(
+  modelId: string,
+  options: LanguageModelV3CallOptions,
+): "none" | "medium" | "high" {
   const provider = options.providerOptions?.adrouter;
   const value = provider?.thinkingLevel ?? provider?.reasoning;
   if (value === "none" || value === "off" || value === "minimal") return "none";
   if (value === "high" || value === "xhigh" || value === "max") return "high";
-  return "medium";
+  return defaultThinkingLevel(modelId);
 }
 
 function bodyFor(
@@ -111,9 +115,10 @@ function bodyFor(
   config: ResolvedAdRouterConfig,
   call: LanguageModelV3CallOptions,
 ): Record<string, unknown> {
+  const selectedModel = config.model || requestedModel;
   return {
-    model: config.model || requestedModel,
-    thinking_level: reasoningLevel(call),
+    model: selectedModel,
+    thinking_level: reasoningLevel(selectedModel, call),
     context: buildNativeContext(call),
     max_output_tokens: config.maxOutputTokens,
   };
@@ -146,11 +151,35 @@ async function readLimitedBody(response: Response, limit: number): Promise<strin
 
 async function providerError(response: Response): Promise<Error> {
   let message = "";
+  let code = "";
+  let issue = "";
   try {
     const value = await readLimitedBody(response, MAX_ERROR_BODY_BYTES);
     try {
       const parsed = JSON.parse(value) as Record<string, unknown>;
       message = sanitizeText(parsed.error ?? parsed.message);
+      if (typeof parsed.code === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(parsed.code)) {
+        code = parsed.code;
+      }
+      const details = parsed.details;
+      if (details && typeof details === "object" && !Array.isArray(details)) {
+        const issues = (details as Record<string, unknown>).issues;
+        const first = Array.isArray(issues) ? issues[0] : undefined;
+        if (first && typeof first === "object" && !Array.isArray(first)) {
+          const record = first as Record<string, unknown>;
+          const path =
+            typeof record.path === "string" && /^[A-Za-z0-9_.-]{1,256}$/.test(record.path)
+              ? record.path
+              : "";
+          const issueCode =
+            typeof record.code === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(record.code)
+              ? record.code
+              : "";
+          issue = [path ? `at ${path}` : "", issueCode ? `[${issueCode}]` : ""]
+            .filter(Boolean)
+            .join(" ");
+        }
+      }
     } catch {
       message = sanitizeText(value);
     }
@@ -159,7 +188,10 @@ async function providerError(response: Response): Promise<Error> {
     // Ignore an unreadable error response.
   }
   const safe = message.slice(0, 500) || response.statusText || "request failed";
-  return new Error(`AdRouter request failed (${response.status}): ${safe}`);
+  const qualifier = [code, issue].filter(Boolean).join(" ");
+  return new Error(
+    `AdRouter request failed (${response.status}${qualifier ? `, ${qualifier}` : ""}): ${safe}`,
+  );
 }
 
 async function request(

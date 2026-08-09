@@ -69,6 +69,96 @@ async function parts(
 }
 
 describe("AdRouter LanguageModelV3", () => {
+  test("uses each model's advertised default reasoning when OpenCode omits a variant", async () => {
+    const expected = {
+      "deepseek-v4-flash": "medium",
+      "deepseek-v4-pro": "medium",
+      "mimo-v2.5": "high",
+      "mimo-v2.5-pro": "high",
+      "agnes-2.0-flash": "none",
+      "agnes-2.5-flash": "none",
+    } as const;
+    for (const [modelId, thinkingLevel] of Object.entries(expected)) {
+      let requestBody: Record<string, unknown> | undefined;
+      const model = createAdRouter({
+        apiKey: "key",
+        baseURL: "http://localhost:8787",
+        fetch: (async (_input, init) => {
+          requestBody = JSON.parse(String(init?.body));
+          return Response.json({
+            turn_id: "defaults",
+            status: "live",
+            ads: [],
+            injection: { mode: "terminal_trailer", placement: "bottom" },
+            settlement: { ad_subsidy: 0 },
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+            assistant: { content: "ok" },
+          });
+        }) as typeof fetch,
+      }).languageModel(modelId);
+
+      await model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+      });
+      expect(requestBody?.thinking_level).toBe(thinkingLevel);
+    }
+  });
+
+  test("preserves long OpenCode system prompts under Router's global request budget", async () => {
+    const systemPrompt = "contract ".repeat(5_000);
+    let requestBody: Record<string, any> | undefined;
+    const model = createAdRouter({
+      apiKey: "key",
+      baseURL: "http://localhost:8787",
+      fetch: (async (_input, init) => {
+        requestBody = JSON.parse(String(init?.body));
+        return Response.json({
+          turn_id: "long-prompt",
+          status: "live",
+          ads: [],
+          injection: { mode: "terminal_trailer", placement: "bottom" },
+          settlement: { ad_subsidy: 0 },
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          assistant: { content: "ok" },
+        });
+      }) as typeof fetch,
+    }).languageModel("deepseek-v4-flash");
+
+    await model.doGenerate({
+      prompt: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: [{ type: "text", text: "continue" }] },
+      ],
+    });
+    expect(requestBody?.context.systemPrompt).toBe(systemPrompt);
+  });
+
+  test("surfaces bounded Router error codes and validation locations", async () => {
+    const model = createAdRouter({
+      apiKey: "key",
+      baseURL: "http://localhost:8787",
+      fetch: (async () =>
+        Response.json(
+          {
+            error: "Invalid integration turn.",
+            code: "invalid_integration_turn",
+            details: {
+              issues: [{ path: "context.messages", code: "too_small", secret: "do-not-display" }],
+            },
+          },
+          { status: 400 },
+        )) as unknown as typeof fetch,
+    }).languageModel("deepseek-v4-flash");
+
+    await expect(
+      model.doGenerate({
+        prompt: [{ role: "user", content: [{ type: "text", text: "hello" }] }],
+      }),
+    ).rejects.toThrow(
+      "AdRouter request failed (400, invalid_integration_turn at context.messages [too_small]): Invalid integration turn.",
+    );
+  });
+
   test("maps split NDJSON, authoritative suffixes, tools, usage, and metadata", async () => {
     let requestBody: Record<string, any> | undefined;
     const fetchMock = (async (_input, init) => {

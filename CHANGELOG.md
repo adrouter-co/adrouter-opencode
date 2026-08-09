@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-beta.8
+
+- Accepted long OpenCode system prompts under the Router's global request budget and surfaced
+  bounded validation codes/paths when a request is rejected.
+- Applied each model's advertised reasoning default when OpenCode omits a variant.
+- Limited the coding provider to the six models that currently pass tool-calling qualification;
+  Agnes 2.5 Pro and Pro Alpha remain WebUI-chat-only until qualified.
+
 ## 0.1.0-beta.7
 
 - Bound OpenCode's registered AI provider to the plugin's own exact package version so candidate

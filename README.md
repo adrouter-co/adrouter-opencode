@@ -11,7 +11,7 @@ OpenCode integration key.
 
 ## What the plugin adds
 
-- eight hosted model routes under the `adrouter/` provider;
+- six tool-capable hosted model routes under the `adrouter/` provider;
 - AI SDK v3 JSON and NDJSON transport for `/v1/integrations/turn`;
 - reasoning, function-tool, usage, settlement, and sponsor metadata handling;
 - strict terminal stream ordering: model and tool events, footer ad, settlement,
@@ -94,12 +94,13 @@ adrouter/mimo-v2.5
 adrouter/mimo-v2.5-pro
 adrouter/agnes-2.0-flash
 adrouter/agnes-2.5-flash
-adrouter/agnes-2.5-pro
-adrouter/agnes-2.5-pro-alpha
 ```
 
 DeepSeek exposes `none`, `medium`, and `high` reasoning variants. MiMo and
-Agnes Flash expose `none` and `high`; both Agnes Pro routes expose `high`. The
+Agnes Flash expose `none` and `high`. When no variant is selected, the plugin uses the Router
+default for that model: `medium` for DeepSeek, `high` for MiMo, and `none` for Agnes Flash.
+Agnes 2.5 Pro and Pro Alpha remain WebUI-chat models and are not registered here until their
+read/write tool-calling contract passes qualification. The
 integration endpoint supports text and function tools only. Image/file prompt
 parts, image tool results, attachments, and provider-executed tool approvals
 are intentionally rejected even when the underlying model has vision support.
