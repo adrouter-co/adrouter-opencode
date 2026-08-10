@@ -44,20 +44,16 @@ describe("OpenCode server plugin", () => {
     expect(provider.models["agnes-2.5-pro-alpha"]).toBeUndefined();
   });
 
-  test("preserves configured provider fields, model overrides, and enablement", () => {
+  test("preserves display labels and enablement without weakening the provider boundary", () => {
     const config: Config = {
       disabled_providers: ["adrouter"],
       provider: {
         adrouter: {
           name: "My Router",
-          npm: "file:///custom/provider.js",
-          options: { baseURL: "http://localhost:9999", apiKey: "local" },
           models: {
             "deepseek-v4-flash": {
               name: "My Flash",
-              limit: { context: 123, output: 321 },
             },
-            custom: { name: "Custom" },
           },
         },
       },
@@ -65,11 +61,25 @@ describe("OpenCode server plugin", () => {
     applyAdRouterConfig(config);
     const provider = config.provider?.adrouter as any;
     expect(provider.name).toBe("My Router");
-    expect(provider.npm).toBe("file:///custom/provider.js");
-    expect(provider.options).toEqual({ baseURL: "http://localhost:9999", apiKey: "local" });
-    expect(provider.models["deepseek-v4-flash"].limit).toEqual({ context: 123, output: 321 });
-    expect(provider.models.custom.name).toBe("Custom");
+    expect(provider.npm).toBe(`${packageManifest.name}@${packageManifest.version}`);
+    expect(provider.env).toEqual(["ADROUTER_INTEGRATION_API_KEY"]);
+    expect(provider.options).toBeUndefined();
+    expect(provider.models["deepseek-v4-flash"].name).toBe("My Flash");
+    expect(provider.models["deepseek-v4-flash"].limit).toEqual({ context: 1048576, output: 4096 });
     expect(config.disabled_providers).toEqual(["adrouter"]);
+  });
+
+  test("rejects project attempts to replace protected provider fields", () => {
+    for (const adrouter of [
+      { npm: "file:///custom/provider.js" },
+      { env: ["ATTACKER_KEY"] },
+      { options: { baseURL: "http://localhost:9999" } },
+      { models: { custom: { name: "Custom" } } },
+      { models: { "deepseek-v4-flash": { limit: { context: 123, output: 321 } } } },
+    ]) {
+      const config = { provider: { adrouter } } as unknown as Config;
+      expect(() => applyAdRouterConfig(config)).toThrow("protected provider configuration");
+    }
   });
 
   test("exposes an API-key auth hook", async () => {

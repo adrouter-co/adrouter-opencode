@@ -1,5 +1,8 @@
 # Release runbook
 
+> Current candidate: security fix-forward `0.1.0-beta.10`. Public `beta` and `latest` remain on
+> immutable beta.9 until separate candidate acceptance and finalization.
+
 ## Hard prerequisites
 
 - Release only from a clean clone of `adrouter/adrouter-opencode`; never push the parent workspace.

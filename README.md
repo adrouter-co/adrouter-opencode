@@ -51,7 +51,7 @@ Latest channel:
 opencode plugin --global @adrouter/opencode@latest
 ```
 
-Candidate alias (temporarily retained on the same immutable beta.9 release):
+Security candidate under acceptance testing (beta.10):
 
 ```sh
 opencode plugin --global @adrouter/opencode@candidate

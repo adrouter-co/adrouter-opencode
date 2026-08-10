@@ -29,6 +29,7 @@ import {
   parseToolCalls,
   parseUsage,
   type RouterPayload,
+  readWithIdleTimeout,
   sanitizeText,
   turnId,
 } from "./transport/parse.js";
@@ -61,6 +62,7 @@ const EMPTY_USAGE: LanguageModelV3Usage = {
 
 const EMPTY_PUBLIC_USAGE: AdRouterUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
 const RESPONSE_HEADER_TIMEOUT_MS = 30_000;
+const RESPONSE_TOTAL_TIMEOUT_MS = 10 * 60_000;
 const MAX_ERROR_BODY_BYTES = 64 * 1024;
 const PROTECTED_HEADERS = new Set(["accept", "authorization", "content-type"]);
 
@@ -124,7 +126,11 @@ function bodyFor(
   };
 }
 
-async function readLimitedBody(response: Response, limit: number): Promise<string> {
+async function readLimitedBody(
+  response: Response,
+  limit: number,
+  signal?: AbortSignal,
+): Promise<string> {
   if (!response.body) return "";
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -132,7 +138,7 @@ async function readLimitedBody(response: Response, limit: number): Promise<strin
   let text = "";
   try {
     while (true) {
-      const item = await reader.read();
+      const item = await readWithIdleTimeout(reader, signal);
       if (item.done) break;
       size += item.value.byteLength;
       if (size > limit) {
@@ -149,12 +155,12 @@ async function readLimitedBody(response: Response, limit: number): Promise<strin
   }
 }
 
-async function providerError(response: Response): Promise<Error> {
+async function providerError(response: Response, signal: AbortSignal): Promise<Error> {
   let message = "";
   let code = "";
   let issue = "";
   try {
-    const value = await readLimitedBody(response, MAX_ERROR_BODY_BYTES);
+    const value = await readLimitedBody(response, MAX_ERROR_BODY_BYTES, signal);
     try {
       const parsed = JSON.parse(value) as Record<string, unknown>;
       message = sanitizeText(parsed.error ?? parsed.message);
@@ -198,7 +204,12 @@ async function request(
   requestedModel: string,
   providerOptions: AdRouterProviderOptions,
   call: LanguageModelV3CallOptions,
-): Promise<{ response: Response; config: ResolvedAdRouterConfig; cleanup: () => void }> {
+): Promise<{
+  response: Response;
+  config: ResolvedAdRouterConfig;
+  signal: AbortSignal;
+  cleanup: () => void;
+}> {
   const config = resolveConfig(requestedModel, providerOptions, call.maxOutputTokens);
   const headers = new Headers(config.headers);
   for (const [key, value] of Object.entries(call.headers ?? {})) {
@@ -207,7 +218,15 @@ async function request(
   const controller = new AbortController();
   const abort = () => controller.abort(call.abortSignal?.reason);
   call.abortSignal?.addEventListener("abort", abort, { once: true });
-  const timer = setTimeout(
+  const totalTimer = setTimeout(
+    () => controller.abort("response-total-timeout"),
+    RESPONSE_TOTAL_TIMEOUT_MS,
+  );
+  const cleanup = () => {
+    clearTimeout(totalTimer);
+    call.abortSignal?.removeEventListener("abort", abort);
+  };
+  const headerTimer = setTimeout(
     () => controller.abort("response-header-timeout"),
     RESPONSE_HEADER_TIMEOUT_MS,
   );
@@ -221,28 +240,34 @@ async function request(
       signal: controller.signal,
     });
   } catch (error) {
-    call.abortSignal?.removeEventListener("abort", abort);
+    cleanup();
     if (controller.signal.reason === "response-header-timeout") {
       throw new AdRouterProtocolError("response header timeout.");
     }
+    if (controller.signal.reason === "response-total-timeout") {
+      throw new AdRouterProtocolError("response total timeout.");
+    }
     throw error;
   } finally {
-    clearTimeout(timer);
+    clearTimeout(headerTimer);
   }
   if (response.status >= 300 && response.status < 400) {
     await response.body?.cancel().catch(() => undefined);
-    call.abortSignal?.removeEventListener("abort", abort);
+    cleanup();
     throw new AdRouterProtocolError("authenticated requests must not redirect.");
   }
   if (!response.ok) {
-    const error = await providerError(response);
-    call.abortSignal?.removeEventListener("abort", abort);
-    throw error;
+    try {
+      throw await providerError(response, controller.signal);
+    } finally {
+      cleanup();
+    }
   }
   return {
     response,
     config,
-    cleanup: () => call.abortSignal?.removeEventListener("abort", abort),
+    signal: controller.signal,
+    cleanup,
   };
 }
 
@@ -515,7 +540,7 @@ async function streamModel(
   } catch (error) {
     return errorStream(error);
   }
-  const { response, cleanup } = requested;
+  const { response, signal, cleanup } = requested;
   const responseHeaders = Object.fromEntries(response.headers.entries());
   return {
     response: { headers: responseHeaders },
@@ -526,12 +551,12 @@ async function streamModel(
         try {
           const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
           if (contentType.includes("application/x-ndjson") && response.body) {
-            for await (const payload of ndjsonLines(response.body))
+            for await (const payload of ndjsonLines(response.body, signal))
               emitPayload(controller, state, payload);
             if (!state.done)
               throw new Error("AdRouter stream ended without an authoritative done event.");
           } else {
-            const raw = await readLimitedBody(response, MAX_TOTAL_RESPONSE_BYTES);
+            const raw = await readLimitedBody(response, MAX_TOTAL_RESPONSE_BYTES, signal);
             let payload: RouterPayload;
             try {
               payload = JSON.parse(raw) as RouterPayload;

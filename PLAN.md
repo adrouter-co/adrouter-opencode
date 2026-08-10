@@ -2,8 +2,9 @@
 
 ## Goal
 
-Publish `@adrouter/opencode@0.1.0-beta.9` with a bounded three-row footer that shows current subsidy
-and cumulative savings, then promote the tested immutable package to npm `beta` and `latest`.
+Preserve the completed beta.9 footer-release record and publish the validated provider/transport
+security fixes as immutable `0.1.0-beta.10` GitHub and npm candidate artifacts, without moving npm
+`beta` or `latest` and while leaving the canonical checkout clean.
 
 ## Context
 
@@ -14,6 +15,10 @@ and cumulative savings, then promote the tested immutable package to npm `beta` 
   admission rejection, not evidence of a failed streamed turn.
 - Release work starts from current protected `main`; the unrelated beta.5 stash and dirty canonical
   worktree remain untouched.
+- Public beta.9 is immutable. The pre-security mixed worktree is preserved on local-only branch
+  `codex/preserve-pre-security-20260811` at `98c3110`.
+- Beta.10 pins protected provider configuration to the exact package and bounds post-header response
+  processing without changing integration-key or model/tool contracts.
 
 ## Research Summary
 
@@ -22,6 +27,8 @@ and cumulative savings, then promote the tested immutable package to npm `beta` 
   error reporting and could create unsafe duplicate behavior.
 - Existing protected workflows can stage an authenticated draft, publish with npm OIDC, and run the
   macOS/Linux/Windows OpenCode compatibility matrix.
+- GitHub protected environments keep release jobs and their secrets behind configured approval
+  rules; npm trusted publishing binds candidate publication to the reviewed workflow through OIDC.
 
 ## Constraints
 
@@ -29,8 +36,8 @@ and cumulative savings, then promote the tested immutable package to npm `beta` 
   stream ordering, settlement accounting, and sponsor isolation.
 - Keep every footer row within visible terminal width and render no more than three rows.
 - Add no dependencies and use Bun 1.3.14 with the existing lockfile.
-- Keep the promoted beta.9 package immutable; retain the `candidate` alias only as the documented
-  cleanup exception and do not advance any channel to a different version.
+- Keep the promoted beta.9 package immutable and on `beta`/`latest`; candidate publication may move
+  only `candidate` to beta.10 and must not advance the accepted channels.
 
 ## Out of Scope
 
@@ -40,7 +47,8 @@ and cumulative savings, then promote the tested immutable package to npm `beta` 
 ## Reversibility
 
 - Keep presentation changes isolated from provider transport and state contracts.
-- Use the higher immutable beta.9 identity; beta.8 remains installable and on public channels.
+- Use the higher immutable beta.10 identity for security candidate work; beta.9 remains installable
+  and on public channels.
 - Stop before publication on any failed test, canary, package-integrity, or ownership check.
 
 ---
@@ -224,6 +232,82 @@ git status --short --branch
 
 ---
 
+## Step D: Security-only beta.10 candidate
+
+### Status
+
+`in_progress`
+
+### Objective
+
+Extract, verify, merge, tag, and publish the provider-boundary and bounded-response fixes as one
+immutable beta.10 candidate while preserving unrelated local presentation work.
+
+### Tasks
+
+- [x] Preserve the original mixed tree at local commit `98c3110` and create
+      `codex/security-beta10` from current `origin/main`.
+- [x] Port only `src/server.ts`, provider/transport parsing, and focused security tests; exclude
+      pre-existing presentation/TUI work.
+- [x] Prepare unused beta.10 package, manifest, changelog, README, runbook, and plan metadata.
+- [x] Run Bun 1.3.14 formatting, full release checks, package inspection, and final diff review.
+- [ ] Push a protected PR, merge after Linux/macOS/Windows CI and secret scanning, and tag the exact
+      merge commit as annotated `v0.1.0-beta.10`.
+- [ ] Approve staging, verify the immutable draft, dispatch `publish-candidate`, approve npm OIDC
+      publication, and verify public integrity/provenance.
+- [ ] Confirm npm `candidate` is beta.10 while `beta`/`latest` remain beta.9 and leave the checkout
+      clean.
+
+### Relevant Files
+
+- `src/server.ts`, `src/provider.ts`, `src/transport/parse.ts`
+- `test/provider/security.test.ts`, `test/server.test.ts`
+- `package.json`, `release-manifest.json`, `CHANGELOG.md`, `README.md`, `RELEASE.md`, `PLAN.md`
+
+### Expected Changes
+
+- modify: protected provider merge, bounded response timers/readers, focused tests, and beta.10 metadata
+- create: protected beta.10 PR/merge/tag/GitHub/npm candidate state
+- delete: no user work, accepted channel, prior artifact, or tag
+
+### Do Not Modify
+
+- sponsor/footer presentation, model catalog, auth key scope, Router state, or unrelated README content
+- npm `beta`/`latest`, beta.9 assets/tags, hosted secrets, or generated local release output
+
+### Commands
+
+```bash
+bun install --frozen-lockfile
+bun run format
+bun run release:check
+git diff --check
+git status --short --branch
+```
+
+### Acceptance Criteria
+
+- [x] The security branch contains no unrelated presentation/TUI work.
+- [x] Provider identity cannot be overridden and response handling remains bounded/fail-closed.
+- [x] The local full release check passes.
+- [ ] Protected multi-platform CI passes.
+- [ ] `v0.1.0-beta.10`, GitHub assets, and npm provenance identify one exact commit/artifact.
+- [ ] npm `candidate` resolves to beta.10 while `beta`/`latest` remain beta.9.
+- [ ] The canonical directory is clean and the preservation branch remains recoverable.
+
+### Validation Results
+
+- Bun 1.3.14: frozen install and formatting pass; `bun run release:check` passes lint, typecheck,
+  release policy, 42 tests with 97.7% line coverage, build, dependency audit, package inspection,
+  and OpenCode 1.18.4/1.18.15 install/model/auth compatibility probes.
+- Protected CI/candidate workflows: not run.
+
+### Findings / Notes
+
+- Authenticated hosted candidate acceptance and final channel promotion remain later explicit gates.
+
+---
+
 ## Follow-up Work
 
 - Remove the retained `candidate` alias and apply beta.8 deprecation only after npm cleanup
@@ -239,3 +323,4 @@ git status --short --branch
 | 2026-08-10 | Treat the observed 429 as a truthful transient admission response. | Router rejects it before reservation/generation and OpenCode already retries successfully. | Add coverage/docs; do not suppress or replay in the plugin. |
 | 2026-08-10 | Publish footer changes as beta.9 candidate only. | Beta.8 is accepted and immutable, while candidate testing must not disturb public channels. | Create a new npm candidate and draft GitHub release; defer finalization. |
 | 2026-08-10 | Promote beta.9 after live Windows acceptance and retain its candidate alias. | npm accepted `beta`/`latest` but denied only candidate deletion; the alias points to the identical immutable package. | Publish the verified GitHub prerelease unchanged, skip beta.8 deprecation, and defer cleanup until suitable npm authorization exists. |
+| 2026-08-11 | Extract a security-only beta.10 candidate from current remote main. | The aggregate local tree also contained unrelated footer/presentation work. | Preserve all original bytes locally while publishing only the validated provider/transport fixes. |

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0-beta.10
+
+- Prevented project configuration from replacing the exact AdRouter provider package, protected
+  authentication environment, fixed model limits, or provider options while preserving safe display
+  labels and provider enablement.
+- Kept a total request deadline active after response headers and applied abort-aware idle limits to
+  error, JSON, and NDJSON body reads so an authenticated upstream cannot hold a turn indefinitely.
+
 ## 0.1.0-beta.9
 
 - Expanded the disclosed footer to at most three terminal-width-bounded rows for placement title,
