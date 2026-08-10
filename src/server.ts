@@ -13,6 +13,22 @@ function providerPackageSpec(): string {
 }
 
 const PROVIDER_PACKAGE_SPEC = providerPackageSpec();
+const PROVIDER_ENV = ["ADROUTER_INTEGRATION_API_KEY"] as const;
+const ALLOWED_PROVIDER_FIELDS = new Set(["id", "name", "npm", "env", "models"]);
+
+function protectedConfigError(): Error {
+  return new Error(
+    "AdRouter protected provider configuration cannot be overridden by project settings.",
+  );
+}
+
+function sameStringArray(value: unknown, expected: readonly string[]): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length === expected.length &&
+    value.every((entry, index) => entry === expected[index])
+  );
+}
 
 function model(
   id: string,
@@ -48,7 +64,7 @@ export function applyAdRouterConfig(config: Config): void {
     id: "adrouter",
     name: "AdRouter",
     npm: PROVIDER_PACKAGE_SPEC,
-    env: ["ADROUTER_INTEGRATION_API_KEY"],
+    env: [...PROVIDER_ENV],
     models: defaultModels,
   };
   if (!current) {
@@ -56,29 +72,45 @@ export function applyAdRouterConfig(config: Config): void {
     return;
   }
 
-  const currentModels = current.models ?? {};
-  const mergedModels: Record<string, unknown> = { ...defaults.models };
-  for (const [id, configured] of Object.entries(currentModels)) {
-    const fallback = defaults.models[id];
-    mergedModels[id] = fallback
-      ? {
-          ...fallback,
-          ...configured,
-          variants: {
-            ...fallback.variants,
-            ...((configured as { variants?: Record<string, unknown> }).variants ?? {}),
-          },
-        }
-      : configured;
+  const configuredProvider = current as unknown as Record<string, unknown>;
+  if (
+    Object.keys(configuredProvider).some((key) => !ALLOWED_PROVIDER_FIELDS.has(key)) ||
+    (configuredProvider.id !== undefined && configuredProvider.id !== "adrouter") ||
+    (configuredProvider.npm !== undefined && configuredProvider.npm !== PROVIDER_PACKAGE_SPEC) ||
+    (configuredProvider.env !== undefined && !sameStringArray(configuredProvider.env, PROVIDER_ENV))
+  ) {
+    throw protectedConfigError();
   }
+
+  const mergedModels: Record<string, unknown> = { ...defaults.models };
+  for (const [id, configured] of Object.entries(current.models ?? {})) {
+    const fallback = defaults.models[id];
+    if (
+      !fallback ||
+      !configured ||
+      typeof configured !== "object" ||
+      Array.isArray(configured) ||
+      Object.keys(configured).some((key) => key !== "name") ||
+      (configured.name !== undefined && typeof configured.name !== "string")
+    ) {
+      throw protectedConfigError();
+    }
+    mergedModels[id] = {
+      ...fallback,
+      ...(configured.name === undefined ? {} : { name: configured.name }),
+    };
+  }
+
+  if (configuredProvider.name !== undefined && typeof configuredProvider.name !== "string") {
+    throw protectedConfigError();
+  }
+
   config.provider = {
     ...config.provider,
     adrouter: {
       ...defaults,
-      ...current,
-      env: current.env ?? defaults.env,
+      ...(current.name === undefined ? {} : { name: current.name }),
       models: mergedModels,
-      options: current.options ? { ...current.options } : undefined,
     },
   } as NonNullable<Config["provider"]>;
 }
