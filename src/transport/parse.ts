@@ -323,8 +323,22 @@ export function finishReason(hasTools: boolean): LanguageModelV3FinishReason {
   return { unified: hasTools ? "tool-calls" : "stop", raw: hasTools ? "tool_calls" : "stop" };
 }
 
-async function readWithIdleTimeout(reader: ReadableStreamDefaultReader<Uint8Array>) {
+function abortedReadError(signal: AbortSignal): unknown {
+  if (signal.reason === "response-total-timeout") {
+    return new AdRouterProtocolError("response total timeout.");
+  }
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("The AdRouter request was aborted.", "AbortError");
+}
+
+export async function readWithIdleTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal?: AbortSignal,
+) {
+  if (signal?.aborted) throw abortedReadError(signal);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let removeAbortListener: (() => void) | undefined;
   try {
     return await Promise.race([
       reader.read(),
@@ -334,14 +348,25 @@ async function readWithIdleTimeout(reader: ReadableStreamDefaultReader<Uint8Arra
           STREAM_IDLE_TIMEOUT_MS,
         );
       }),
+      ...(signal
+        ? [
+            new Promise<never>((_resolve, reject) => {
+              const abort = () => reject(abortedReadError(signal));
+              signal.addEventListener("abort", abort, { once: true });
+              removeAbortListener = () => signal.removeEventListener("abort", abort);
+            }),
+          ]
+        : []),
     ]);
   } finally {
     if (timer) clearTimeout(timer);
+    removeAbortListener?.();
   }
 }
 
 export async function* ndjsonLines(
   body: ReadableStream<Uint8Array>,
+  signal?: AbortSignal,
 ): AsyncGenerator<RouterPayload> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -350,7 +375,7 @@ export async function* ndjsonLines(
   let totalBytes = 0;
   try {
     while (true) {
-      const { done, value } = await readWithIdleTimeout(reader);
+      const { done, value } = await readWithIdleTimeout(reader, signal);
       if (done) break;
       totalBytes += value.byteLength;
       if (totalBytes > MAX_TOTAL_RESPONSE_BYTES) {

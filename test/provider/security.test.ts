@@ -242,4 +242,41 @@ describe("transport security", () => {
     if (finish?.type !== "finish") throw new Error("missing finish");
     expect((finish.providerMetadata?.adrouter as any).ads).toEqual([]);
   });
+
+  test("keeps an automatic deadline attached after response headers", async () => {
+    const originalSetTimeout = globalThis.setTimeout;
+    const callerAbort = new AbortController();
+    globalThis.setTimeout = ((handler: TimerHandler, timeout?: number, ...args: unknown[]) =>
+      originalSetTimeout(handler, Math.min(Number(timeout ?? 0), 5), ...args)) as typeof setTimeout;
+    try {
+      const model = createAdRouter({
+        apiKey: "key",
+        baseURL: "http://localhost:8787",
+        fetch: (async (_input, init) => {
+          const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+              init?.signal?.addEventListener("abort", () => {
+                controller.error(init.signal?.reason ?? new DOMException("aborted", "AbortError"));
+              });
+            },
+          });
+          return new Response(body, { headers: { "content-type": "application/json" } });
+        }) as typeof fetch,
+      }).languageModel("deepseek-v4-flash");
+      const pending = model.doGenerate({ ...prompt, abortSignal: callerAbort.signal });
+      const outcome = await Promise.race([
+        pending.then(
+          () => "resolved",
+          (error) => String(error),
+        ),
+        new Promise<string>((resolve) => originalSetTimeout(() => resolve("still pending"), 50)),
+      ]);
+      callerAbort.abort();
+      await Promise.resolve(pending).catch(() => undefined);
+      expect(outcome).not.toBe("still pending");
+      expect(outcome).toContain("timeout");
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
+  });
 });

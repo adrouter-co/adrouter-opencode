@@ -3,8 +3,10 @@ import {
   ADROUTER_PALETTE,
   AdRouterPanelState,
   formatSubsidy,
+  renderAdFooterLines,
   renderCompactAd,
   truncateVisible,
+  visibleWidth,
 } from "../../src/presentation.js";
 
 const tierC = {
@@ -46,6 +48,48 @@ describe("tiered presentation", () => {
         ),
       ).toBe(`Sponsored · TIER ${tier}: Acme — Ship — https://acme.test`);
     }
+  });
+
+  test("renders a bounded three-line footer with current subsidy and session savings", () => {
+    expect(
+      renderAdFooterLines(tierC, 120, {
+        currentSubsidy: 0.002,
+        cumulativeSavings: 0.012,
+      }),
+    ).toEqual([
+      "Sponsored · TIER C: Developer Tools",
+      "Build faster",
+      "subsidy $0.002000 · saved $0.012 · https://example.test",
+    ]);
+
+    for (const width of [20, 40, 80, 120]) {
+      const lines = renderAdFooterLines(
+        { ...tierC, body: "Build faster with a deliberately long terminal-safe sponsor message" },
+        width,
+        { currentSubsidy: 0.002, cumulativeSavings: 0.012 },
+      );
+      expect(lines.length).toBeLessThanOrEqual(3);
+      expect(lines.every((line) => visibleWidth(line) <= width)).toBe(true);
+    }
+  });
+
+  test("shows pending subsidy without inventing settlement and keeps NONE compact", () => {
+    expect(renderAdFooterLines(tierC, 80, { cumulativeSavings: 0 })[2]).toBe(
+      "subsidy pending · saved $0.000000 · https://example.test",
+    );
+    expect(
+      renderAdFooterLines(
+        {
+          id: "none",
+          tier: "NONE",
+          title: "ignored",
+          body: "Privacy guardrail",
+          label: "TIER NONE",
+        },
+        120,
+        { currentSubsidy: 99, cumulativeSavings: 99 },
+      ),
+    ).toEqual(["TIER NONE: No sponsored content — Privacy guardrail"]);
   });
 
   test("renders NONE and keeps the compact palette and savings formatter", () => {

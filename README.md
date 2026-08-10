@@ -16,8 +16,8 @@ OpenCode integration key.
 - reasoning, function-tool, usage, settlement, and sponsor metadata handling;
 - strict terminal stream ordering: model and tool events, footer ad, settlement,
   then completion;
-- one compact, explicitly labelled Tier A/B/C footer plus deduplicated session
-  savings;
+- one bounded, explicitly labelled Tier A/B/C footer showing ad copy, current-turn subsidy, and
+  deduplicated session savings in at most three terminal rows;
 - fail-closed URL, redirect, header, timeout, response-size, and protocol checks.
 
 Sponsor copy and settlement metadata are display/accounting data only. They are
@@ -186,6 +186,8 @@ and individual NDJSON lines at 1 MiB.
 ## Footer behavior
 
 - Tier A, B, and C share one `Sponsored · TIER …` footer shape.
+- Sponsored footers use at most three terminal rows: disclosure/title, ad copy, then current-turn
+  subsidy plus cumulative session savings and the URL when space permits.
 - Tier NONE remains visible for a privacy or guardrail outcome.
 - Degraded, malformed, aborted, or incomplete turns clear stale sponsorship.
 - Session savings are deduplicated by AdRouter turn ID.
