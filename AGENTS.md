@@ -1,62 +1,51 @@
 # AdRouter OpenCode repository instructions
 
-## Current local candidate and repository boundary
+## Repository boundary
 
-This independent repository owns `@adrouter/opencode` and uses Bun. Its GitHub repository is
-`adrouter/adrouter-opencode`; never combine its lockfile, Git history, or release state with CLI or
-Desktop.
+This independent repository owns `@adrouter/opencode`. Its GitHub repository is
+`adrouter/adrouter-opencode`; never combine its lockfile, Git history, commits, or release state
+with CLI or Desktop. Check `git status --short --branch` before work and preserve dirty/diverged
+user changes.
 
-Public beta.4 remains on `beta`/`latest`. The substantial user-owned, unreleased beta.5
-installation-auth work remains parked in `stash@{0}` as `clean-slate-2026-08-02`; do not apply,
-drop, rewrite, publish, or treat that snapshot as accepted.
-
-Beta.6 is an immutable rejected npm candidate: its plugin target was correct, but its unversioned
-provider registration made OpenCode execute public beta.4 and call machine auth. Never promote,
-rebuild, or retag beta.6. The active source is the beta.7 fix-forward candidate, which binds the
-provider to its own exact package version. Release mutations require explicit user authorization.
+Read `README.md`, `PLAN.md`, `SECURITY.md`, `RELEASE.md`, manifests, workflows, and executable
+source before product or release changes. Volatile local/public state lives in
+`../../docs/state.md` and the newest workspace parity report; re-query npm/GitHub before repeating
+it here.
 
 ## Source map and toolchain
 
 - `src/server.ts` — OpenCode provider/model registration.
 - `src/provider.ts`, `src/contracts.ts`, and `src/transport/` — AI SDK provider, prompt/tool mapping,
   configuration, JSON/NDJSON parsing, and transport protections.
-- `src/tui.tsx` and `src/presentation.ts` — display-only bottom panel and cumulative savings.
+- `src/tui.tsx` and `src/presentation.ts` — display-only three-line bottom footer and cumulative
+  savings.
 - `test/`, `scripts/`, and `.github/workflows/` — provider/auth/transport/TUI/release coverage and
   candidate/promotion automation.
-- `release-manifest.json` — beta.7 candidate/final-channel intent, not evidence of publication.
+- `release-manifest.json` — intended release identity/channels, not evidence of publication.
 - `dist/`, coverage, tarballs, isolated installs, and acceptance output are generated.
 
 Use Bun 1.3.14 and `bun.lock`; do not add npm, pnpm, or Yarn lockfiles. Preserve OpenCode
 `>=1.18.4 <2`, strict TypeScript, AI SDK provider v3, SolidJS/OpenTUI, the `adrouter` IDs, and root,
 `./server`, and `./tui` exports.
 
-## Public versus local state
+## Authentication, catalog, and platform exceptions
 
-Public npm state was rechecked on 2026-08-08: beta.6 exists only on `candidate`; public
-`beta`/`latest` remain beta.4. Re-query before every release claim and deprecate beta.6 only after
-the beta.7 registry candidate passes.
-
-The active beta.7 source registers all eight Router model IDs and their exact 524,288- or
-1,048,576-token context windows while enforcing a conservative 4,096-token integration output
-cap. Its registered provider package must include the exact beta.7 version. The integration path
-remains text/tool-only even when the underlying model accepts images.
-
-## Remaining release blockers
-
-- Staging currently exposes the integration endpoint and eight-model catalog, but local source or a
-  package manifest alone never proves the deployed contract; re-run the authenticated canaries.
-- Beta.7 must pass clean-tree checks, protected review, staging canaries, and registry-backed
-  OpenCode execution before it can replace the rejected beta.6 candidate.
-- The beta.7 immutable tag, staged assets, registry candidate, cross-host acceptance, and GitHub
-  prerelease do not exist until their protected release steps succeed.
-- The complete clean-tree `release:check` remains a release gate. Local unit, type, lint, build, and
-  release-policy checks do not authorize publication by themselves.
+- OpenCode uses a dedicated integration key on `POST /v1/integrations/turn`. That key is scoped only
+  to the integration route and must never be accepted by `/v1/profile`, `/v1/agent/turn`, or any
+  machine-installation endpoint.
+- Router's machine-installation policy still rejects client kind `opencode`. Never describe current
+  integration-key access as DPoP installation auth.
+- The provider registers the same eight Router IDs and exact model-specific context/input/output
+  tuples. Its current integration transport remains text/tool-only even when a model's browser
+  descriptor permits image input.
+- The integration may enforce a conservative request output default/cap without rewriting the
+  underlying model catalog. Document that as a platform exception.
 
 ## Product and security invariants
 
-- Sponsor/settlement information is provider display metadata only. Never put it in prompts,
-  assistant text, tool definitions/results, commands, edits, or compacted context.
-- Keep the compact Tier A/B/C bottom-panel layout, deduplicated cumulative savings, and stale-state
+- Sponsor/settlement information is display metadata only. Never put it in prompts, assistant text,
+  tool definitions/results, commands, edits, or compacted context.
+- Keep the width-safe, theme-aware three-line footer, deduplicated cumulative savings, and stale
   clearing for off/degraded/NONE outcomes.
 - Hosted origins must use live execution. Custom remote URLs require HTTPS and HTTP is loopback-only.
   Reject credentialed URLs, authenticated redirects, protected-header overrides, oversized bodies
@@ -67,10 +56,9 @@ remains text/tool-only even when the underlying model accepts images.
 
 ## Verification and releases
 
-During local source work, use focused checks first:
+Run focused non-formatting checks while a dirty user tree must be preserved:
 
 ```sh
-bun run format
 bun run lint
 bun run typecheck
 bun test
@@ -78,10 +66,8 @@ bun run build
 bun run release:policy
 ```
 
-Do not run hosted canaries, acceptance upload, release soak, tag/publish commands, dist-tag
-operations, or repository-visibility changes without explicit authorization. Run the full
-`bun run release:check` only from a clean release-input tree when release readiness is actually in
-scope. Only a clean, committed, exact candidate with Router conformance, package inspection,
-cross-host acceptance, and separate release authorization may be tagged or published. Versions
-and tags are immutable; fix forward. Never change protected environments or remote secrets
-without explicit authorization.
+Formatting may rewrite user-owned files; run it only when its scope is intentional. Run the full
+`bun run release:check` only from a clean exact release-input tree. Hosted canaries, acceptance
+upload, release soak, tags, publication, dist-tag operations, release edits, visibility changes,
+protected approvals, and remote-secret changes require explicit authorization. Versions and tags
+are immutable; fix forward.

@@ -1,5 +1,10 @@
 # Release runbook
 
+> Current-state note (2026-08-10): public `beta`/`latest` and the retained `candidate` alias resolve
+> to immutable beta.9. This local dirty/diverged checkout still carries older manifest data and is
+> not a release input. Re-query the registry/tag/release and reconcile a clean branch before using
+> this runbook.
+
 ## Hard prerequisites
 
 - Release only from a clean clone of `adrouter/adrouter-opencode`; never push the parent workspace.
@@ -135,15 +140,15 @@ deprecates `supersedes`, and publishes GitHub with the manifest's prerelease sta
 The workflow is resumable only when tag, commit, artifact, integrity, and registry metadata are
 exact. Fix workflow defects through protected `main`; never retag or rebuild.
 
-## Beta.7 soak and stable 0.1.0
+## Accepted-beta soak and stable 0.1.0
 
-Beta.6 was rejected before channel promotion because its unversioned provider registration resolved
-public beta.4 at execution time. Keep beta.6 immutable and deprecated; never promote or rebuild it.
+Historical rejected/superseded betas remain immutable. Current beta.9 is public; its retained
+`candidate` alias is a recorded npm cleanup exception, not a second candidate or stable-release
+approval.
 
-For `0.1.0-beta.8`, finalization must leave both `beta` and `latest` on beta.8, remove `candidate`,
-deprecate beta.4, and publish a GitHub prerelease.
-
-Start the stable clock at successful beta.8 finalization. For at least 48 hours:
+Start any stable clock only from an explicitly accepted public beta whose tag, source, tarball,
+provenance, GitHub assets, npm integrity, and cross-host acceptance all match. For at least 48
+hours:
 
 - retain successful anonymous packaged-user workflow evidence for macOS, Linux, and Windows;
 - keep both authenticated model canaries green;
@@ -156,18 +161,18 @@ At or after the 48-hour point, dispatch the non-mutating published-channel verif
 
 ```sh
 gh workflow run soak.yml --repo adrouter/adrouter-opencode --ref main \
-  -f version=0.1.0-beta.8 -f channel=beta
+  -f version=<accepted-beta> -f channel=beta
 ```
 
 Record its successful run URL for the `darwin`, `linux`, and `windows` cohort evidence fields. The
 same run is valid for all three fields because its required matrix contains every supported OS and
 OpenCode version plus both authenticated canaries.
 
-After a clean soak, the stable PR may modify only `package.json`, `release-manifest.json`,
-`CHANGELOG.md`, `README.md`, `SECURITY.md`, `RELEASE.md`, and `PLAN.md`. Set `version=0.1.0`,
-`latest=0.1.0`, `beta=0.1.0-beta.8`, remove `supersedes`, set `githubPrerelease=false`, and record
-the authenticated soak evidence. Source, tests, scripts, workflows, and dependencies must remain
-identical to beta.8. Publish stable through the same candidate and finalization phases.
+After a clean soak, the stable PR may modify only the release-policy allowlist and must point
+`beta` at that accepted beta while setting `latest` to `0.1.0`, clearing supersession intent,
+setting `githubPrerelease=false`, and recording authenticated soak evidence. Source, tests, scripts,
+workflows, and dependencies must remain identical to the accepted beta. Re-query current npm
+dist-tag deletion behavior and encode any cleanup exception before promotion.
 
 ## Independent verification and cleanup
 
@@ -190,8 +195,9 @@ gh release view v<version> --repo adrouter/adrouter-opencode \
   --json isDraft,isPrerelease,url,assets,tagName
 ```
 
-The smoke test must import the root/server/TUI targets, discover all six tool-capable AdRouter models,
-and recognize the `AdRouter integration API key (adr_int_)` auth method without
+The smoke test must import the root/server/TUI targets, discover all eight catalog models, preserve
+the documented tool-calling restriction on the two Agnes Pro variants, and recognize the
+`AdRouter integration API key (adr_int_)` auth method without
 `Unknown provider "adrouter"`.
 
 After each successful beta or stable release, delete the GitHub secret and revoke the corresponding
@@ -207,8 +213,8 @@ Keep the staging key only while canaries remain useful; rotate or revoke it afte
 
 - Before final promotion, leave `beta`/`latest` unchanged, remove or replace only `candidate`,
   deprecate the rejected immutable version, and fix forward.
-- Beta.6 is rejected; never overwrite it.
-- If beta.8 is unusable, release beta.9; never overwrite beta.8.
-- If stable 0.1.0 is invalid, move `latest` back to beta.8, deprecate 0.1.0, and fix forward through
-  `0.1.1-beta.1` followed by `0.1.1`.
+- Rejected and superseded betas are immutable; never overwrite, rebuild, or promote them.
+- If the current beta is unusable, release a higher unused beta and restart acceptance/soak.
+- If stable 0.1.0 is invalid, move `latest` back to the last accepted beta, deprecate 0.1.0, and
+  fix forward through `0.1.1-beta.1` followed by `0.1.1`.
 - Never overwrite, reuse, move, or unpublish an immutable version or Git tag.
