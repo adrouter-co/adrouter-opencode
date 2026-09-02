@@ -213,7 +213,7 @@ for (const opencodeVersion of opencodeVersions) {
     delete env.OPENCODE_CONFIG_DIR;
     delete env.OPENCODE_TUI_CONFIG;
 
-    const cli = ["bunx", `opencode-ai@${opencodeVersion}`];
+    const cli = ["bun", "x", `opencode-ai@${opencodeVersion}`];
     const installed = await run([...cli, "plugin", "--global", pluginSpec], directory, env);
     success(installed, `OpenCode ${opencodeVersion} global plugin install`);
     assert(
