@@ -1,0 +1,98 @@
+stages:
+  - history_scan
+  - validate
+  - release_hold
+
+default:
+  interruptible: true
+
+history_secret_scan:
+  image: alpine:3.22
+  stage: history_scan
+  variables:
+    GIT_DEPTH: "0"
+  before_script:
+    - apk add --no-cache curl git tar
+  script:
+    - curl --fail --location --silent --show-error --output /tmp/gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+    - echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tar.gz' | sha256sum --check --strict
+    - tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+    - /tmp/gitleaks git --no-banner --redact --log-opts="--all" .
+
+.opencode_checks:
+  script:
+    - bun install --frozen-lockfile
+    - bun run lint
+    - bun run typecheck
+    - bun run test:coverage
+    - bun run build
+    - bun run audit
+    - bun run package:check
+    - bun run release:policy
+
+linux_x64:
+  extends: .opencode_checks
+  image: oven/bun:1.3.14
+  stage: validate
+  script:
+    - bun install --frozen-lockfile
+    - bun run lint
+    - bun run typecheck
+    - bun run test:coverage
+    - bun run build
+    - bun run audit
+    - bun run package:check
+    - bun run release:policy
+    - bun run plugin:check
+
+macos_arm64:
+  stage: validate
+  tags:
+    - saas-macos-medium-m1
+  image: macos-15-xcode-16
+  before_script:
+    - curl --fail --location --silent --show-error --output /tmp/bun.zip https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-darwin-aarch64.zip
+    - unzip -q /tmp/bun.zip -d /tmp/bun
+    - export PATH="/tmp/bun/bun-darwin-aarch64:$PATH"
+  script:
+    - export PATH="/tmp/bun/bun-darwin-aarch64:$PATH"
+    - test "$(bun --version)" = "1.3.14"
+    - bun install --frozen-lockfile
+    - bun run lint
+    - bun run typecheck
+    - bun run test:coverage
+    - bun run build
+    - bun run audit
+    - bun run package:check
+    - bun run release:policy
+    - bun run plugin:check
+
+windows_x64:
+  stage: validate
+  tags:
+    - saas-windows-medium-amd64
+  before_script:
+    - Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-windows-x64.zip" -OutFile "$env:TEMP\bun.zip"
+    - Expand-Archive -Path "$env:TEMP\bun.zip" -DestinationPath "$env:TEMP\bun" -Force
+    - $env:Path = "$env:TEMP\bun\bun-windows-x64;$env:Path"
+  script:
+    - $env:Path = "$env:TEMP\bun\bun-windows-x64;$env:Path"
+    - if ((bun --version) -ne "1.3.14") { throw "Bun 1.3.14 is required" }
+    - bun install --frozen-lockfile
+    - bun run lint
+    - bun run typecheck
+    - bun run test:coverage
+    - bun run build
+    - bun run audit
+    - bun run package:check
+    - bun run release:policy
+    - bun run plugin:check
+
+release_hold:
+  image: alpine:3.22
+  stage: release_hold
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  script:
+    - echo "Release blocked until GitLab Generic Package staging, protected canary, npm OIDC candidate, and separate finalization jobs are approved."
+    - exit 1
