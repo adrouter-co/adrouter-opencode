@@ -236,7 +236,7 @@ git status --short --branch
 
 ### Status
 
-`in_progress`
+`complete`
 
 ### Objective
 
@@ -251,11 +251,11 @@ immutable beta.10 candidate while preserving unrelated local presentation work.
       pre-existing presentation/TUI work.
 - [x] Prepare unused beta.10 package, manifest, changelog, README, runbook, and plan metadata.
 - [x] Run Bun 1.3.14 formatting, full release checks, package inspection, and final diff review.
-- [ ] Push a protected PR, merge after Linux/macOS/Windows CI and secret scanning, and tag the exact
+- [x] Push a protected PR, merge after Linux/macOS/Windows CI and secret scanning, and tag the exact
       merge commit as annotated `v0.1.0-beta.10`.
-- [ ] Approve staging, verify the immutable draft, dispatch `publish-candidate`, approve npm OIDC
+- [x] Approve staging, verify the immutable draft, dispatch `publish-candidate`, approve npm OIDC
       publication, and verify public integrity/provenance.
-- [ ] Confirm npm `candidate` is beta.10 while `beta`/`latest` remain beta.9 and leave the checkout
+- [x] Confirm npm `candidate` is beta.10 while `beta`/`latest` remain beta.9 and leave the checkout
       clean.
 
 ### Relevant Files
@@ -290,30 +290,43 @@ git status --short --branch
 - [x] The security branch contains no unrelated presentation/TUI work.
 - [x] Provider identity cannot be overridden and response handling remains bounded/fail-closed.
 - [x] The local full release check passes.
-- [ ] Protected multi-platform CI passes.
-- [ ] `v0.1.0-beta.10`, GitHub assets, and npm provenance identify one exact commit/artifact.
-- [ ] npm `candidate` resolves to beta.10 while `beta`/`latest` remain beta.9.
-- [ ] The canonical directory is clean and the preservation branch remains recoverable.
+- [x] Protected multi-platform CI passes.
+- [x] `v0.1.0-beta.10`, GitHub assets, and npm provenance identify one exact commit/artifact.
+- [x] npm `candidate` resolves to beta.10 while `beta`/`latest` remain beta.9.
+- [x] Candidate source was clean at handoff and the preservation branch/stash remains recoverable;
+      later governance-only audit edits are separate.
 
 ### Validation Results
 
 - Bun 1.3.14: frozen install and formatting pass; `bun run release:check` passes lint, typecheck,
   release policy, 42 tests with 97.7% line coverage, build, dependency audit, package inspection,
   and OpenCode 1.18.4/1.18.15 install/model/auth compatibility probes.
-- Protected CI/candidate workflows: not run.
+- Authenticated tagged staging, full release checks, immutable artifact verification, and draft
+  release: passed on attempt 4; run `31442667976`.
+- Trusted candidate publication and Ubuntu/macOS/Windows registry installs for OpenCode `1.18.4`
+  and `1.18.15`: passed; run `31616217105`.
+- npm `candidate=0.1.0-beta.10`; exact integrity
+  `sha512-Zcfbx2IhUi7zVNWpL4kaGQCTvYEPqdorQRHsCNSUT63x+Bnx2zZwzSRz5EOcPAFlB3sNuc97dRNr4EwVh++YKw==`;
+  `beta`/`latest` remain beta.9.
 
 ### Findings / Notes
 
-- Authenticated hosted candidate acceptance and final channel promotion remain later explicit gates.
+- Staging attempts 1-3 failed closed before artifact creation because the protected integration
+  credential was invalid. The workflow consumes GitHub secret
+  `ADROUTER_STAGING_INTEGRATION_API_KEY` as runtime `ADROUTER_INTEGRATION_API_KEY`; after that exact
+  handoff was corrected, attempt 4 passed without changing tagged source.
+- Broader authenticated integration acceptance and final channel promotion remain later explicit
+  gates. Candidate finalization was not dispatched.
 
 ---
 
 ## Follow-up Work
 
-- Remove the retained `candidate` alias and apply beta.8 deprecation only after npm cleanup
-  authorization is available; neither is required for beta/latest installation.
-- Start the stable soak clock only after candidate cleanup so the published-channel verifier retains
-  its normal invariant.
+- Complete broader authenticated integration acceptance across the supported host/version matrix,
+  covering key isolation, eight-model parity, tools/streaming, footer cleanup, bounded recovery,
+  and no replay after partial paid output.
+- Decide beta.10 finalization separately. Do not move `beta`/`latest`, remove `candidate`, or publish
+  the draft release without explicit authorization and the repository acceptance gates.
 
 ## Decision Log
 
@@ -324,3 +337,4 @@ git status --short --branch
 | 2026-08-10 | Publish footer changes as beta.9 candidate only. | Beta.8 is accepted and immutable, while candidate testing must not disturb public channels. | Create a new npm candidate and draft GitHub release; defer finalization. |
 | 2026-08-10 | Promote beta.9 after live Windows acceptance and retain its candidate alias. | npm accepted `beta`/`latest` but denied only candidate deletion; the alias points to the identical immutable package. | Publish the verified GitHub prerelease unchanged, skip beta.8 deprecation, and defer cleanup until suitable npm authorization exists. |
 | 2026-08-11 | Extract a security-only beta.10 candidate from current remote main. | The aggregate local tree also contained unrelated footer/presentation work. | Preserve all original bytes locally while publishing only the validated provider/transport fixes. |
+| 2026-08-13 | Complete beta.10 candidate publication after authenticated staging passed. | Exact tagged staging and all six registry smokes passed with the correctly named protected-secret handoff. | Beta.10 is on `candidate`; beta.9 remains on `beta`/`latest`, and finalization stays separate. |
