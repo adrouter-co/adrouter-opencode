@@ -1,3 +1,5 @@
+
+Source migration destination: [adrouter-co/adrouter-opencode](https://github.com/adrouter-co/adrouter-opencode). GitLab remains canonical until the reviewed Operations cutover. Release and deployment recovery are separate from this source migration.
 <h1 align="center">AdRouter for OpenCode</h1>
 
 <p align="center">

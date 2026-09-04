@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import manifest from "../package.json" with { type: "json" };
 import releaseManifest from "../release-manifest.json" with { type: "json" };
 import { assertReleasePolicy } from "./release-policy.js";
@@ -144,6 +144,11 @@ try {
     readFileSync(join(installDirectory, "node_modules/@adrouter/opencode/package.json"), "utf8"),
   );
   assert(basename(packedManifest.main) === "index.js", "Installed legacy main is incorrect.");
+  if (process.env.ADROUTER_STAGING_OUTPUT) {
+    const destination = resolve(process.env.ADROUTER_STAGING_OUTPUT);
+    mkdirSync(destination, { recursive: true });
+    copyFileSync(tarball, join(destination, tarballName));
+  }
 } finally {
   rmSync(directory, { force: true, recursive: true });
 }

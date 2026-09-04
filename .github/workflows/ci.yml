@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
@@ -16,10 +17,12 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
@@ -30,6 +33,16 @@ jobs:
       - run: bun run build
       - run: bun run audit
       - run: bun run package:check
+        env:
+          ADROUTER_STAGING_OUTPUT: staging
       - name: Validate OpenCode plugin installation, models, and auth discovery
-        if: runner.os == 'Linux'
         run: bun run plugin:check
+
+      - name: Record tested artifact checksums
+        run: bun scripts/staging-manifest.mjs staging
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: staging-${{ github.sha }}-${{ matrix.os }}
+          path: staging/
+          if-no-files-found: error
+          retention-days: 7

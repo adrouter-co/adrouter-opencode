@@ -3,7 +3,7 @@
 ## Current local candidate and repository boundary
 
 This independent repository owns `@adrouter/opencode` and uses Bun. Its GitHub repository is
-`adrouter/adrouter-opencode`; never combine its lockfile, Git history, or release state with CLI or
+`adrouter-co/adrouter-opencode`; never combine its lockfile, Git history, or release state with CLI or
 Desktop.
 
 Public beta.8 remains on `beta`/`latest`. The substantial user-owned, unreleased beta.5

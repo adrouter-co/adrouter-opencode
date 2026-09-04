@@ -33,12 +33,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/adrouter/adrouter-opencode.git"
+    "url": "git+https://github.com/adrouter-co/adrouter-opencode.git"
   },
   "bugs": {
-    "url": "https://github.com/adrouter/adrouter-opencode/issues"
+    "url": "https://github.com/adrouter-co/adrouter-opencode/issues"
   },
-  "homepage": "https://github.com/adrouter/adrouter-opencode#readme",
+  "homepage": "https://github.com/adrouter-co/adrouter-opencode#readme",
   "publishConfig": {
     "access": "public",
     "provenance": true,
